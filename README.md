@@ -1,2 +1,2 @@
 # mea
-mcnaughton lab ephys data analysis
+McNaughton lab ephys data analysis
