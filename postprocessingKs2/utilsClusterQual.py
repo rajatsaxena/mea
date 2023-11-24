@@ -92,7 +92,7 @@ def calcISIViolations(spike_train, min_time, max_time, isi_threshold, min_isi=0.
     return fpRate, num_violations
 
 
-def calcFiringRate(spike_train, min_time = None, max_time = None):
+def calcFiringRate(spike_train, min_time=None, max_time=None):
     """Calculate firing rate for a spike train.
     If no temporal bounds are specified, the first and last spike time are used.
     Inputs:
@@ -116,20 +116,22 @@ def calcFiringRate(spike_train, min_time = None, max_time = None):
     return fr
 
 
-def calcPresenceRatio(spike_train, min_time, max_time, num_bins=100):
+def calcPresenceRatio(spike_train, min_time, max_time, hist_win=10):
     """Calculate fraction of time the unit is present within an epoch.
     Inputs:
     -------
     spike_train : array of spike times
     min_time : minimum time for potential spikes
     max_time : maximum time for potential spikes
+    hist_win: binwidth (10s)
     Outputs:
     --------
     presence_ratio : fraction of time bins in which this unit is spiking
     """
-    h, b = np.histogram(spike_train, np.linspace(min_time, max_time, num_bins))
-    return np.sum(h > 0) / num_bins
-
+    bins = np.arange(min_time, max_time + hist_win, hist_win)
+    spks_bins, _ = np.histogram(spike_train, bins)
+    pr = len(np.where(spks_bins)[0]) / len(spks_bins)
+    return pr
 
 def calcAmpCutoff(amplitudes, num_histogram_bins = 500, histogram_smoothing_value = 3):
     """ Calculate approximate fraction of spikes missing from a distribution of amplitudes
@@ -161,7 +163,7 @@ def calcQualityMetrics(dirname, fs=30000.0, params=None):
     if params is None:
         params = {}
         params['isi_threshold']=0.002
-        params['min_isi']=0.0005
+        params['min_isi']=0.0001
         params['isi_viol_th'] = 0.2
         params['presence_ratio'] = 0.75
         params['firing_rate_th'] = 0.01 
