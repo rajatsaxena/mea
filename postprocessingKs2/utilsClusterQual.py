@@ -158,14 +158,14 @@ def calcAmpCutoff(amplitudes, num_histogram_bins = 500, histogram_smoothing_valu
 
 
 # function to calculate quality metrics
-def calcQualityMetrics(dirname, wfamp, fs=30000.0, params=None):
+def calcQualityMetrics(dirname, wfamp, epochs=None, fs=30000.0, params=None):
     ## Params for quality metrics
     if params is None:
         params = {}
         params['isi_threshold']=0.002
         params['min_isi']=0.0001
         params['isi_viol_th'] = 0.2
-        params['presence_ratio'] = 0.75
+        params['presence_ratio'] = 0.7
         params['firing_rate_th'] = 0.01 
         params['amp_cutoff_th'] = 0.2 
         params['amp_th'] = 30 # uV 
@@ -176,7 +176,8 @@ def calcQualityMetrics(dirname, wfamp, fs=30000.0, params=None):
     amplitudes = np.ravel(np.load(os.path.join(dirname,'amplitudes.npy'), allow_pickle=True))
     cluster_info = pd.read_csv(os.path.join(dirname,'cluster_info.tsv'), sep='\t')
     total_units = len(np.unique(spike_clusters))
-    epoch = [0, spike_times[-1]]
+    if epochs is None:
+        epoch = [0, spike_times[-1]]
     in_epoch = (spike_times > epoch[0]) * (spike_times < epoch[-1])
     
     # Calculate unit quality metrics
