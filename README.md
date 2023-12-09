@@ -4,7 +4,7 @@ Note that many of these scripts are modified from different sources such as Alle
 I have tried to give credit whenever possible.
 
 
-* postprocessingKs2:
+* preprocessingKs2:
   * IntanRhdToNWB.py: use rhdtonwb-SWIL.py script as a template for converting Intan RHD files to NWB data format
   * ProcessRhd: used to convert Intan RHD files to merged binary files (for Kilosort) after shift alignment, and extract merged 30x sub-sampled LFP, digital, and analog signals
     
