@@ -246,6 +246,7 @@ subsamplingfactor = 30
 dirname = 'Z:\Justin\VR36\VR36_231007_194718'
 rawfname = 'rhd'
 aname = 'VR36'
+saveLFP = True
 
 #####
 lfp_filename = os.path.join(dirname,aname+'-lfp.npy')
@@ -256,7 +257,6 @@ analog_in = None
 dig_in = None
 amp_data_mmap = None
 amp_ts_mmap = None
-saveLFP = True
 files = natsorted(glob.glob(os.path.join(dirname,rawfname,'*.rhd')))
 for i, filename in enumerate(files):
     if i==0:
