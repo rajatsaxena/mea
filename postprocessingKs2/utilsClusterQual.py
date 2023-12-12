@@ -158,7 +158,7 @@ def calcAmpCutoff(amplitudes, num_histogram_bins = 500, histogram_smoothing_valu
 
 
 # function to calculate quality metrics
-def calcQualityMetrics(dirname, wfamp, epochs=None, fs=30000.0, params=None):
+def calcQualityMetrics(dirname, wfamp, epoch=None, fs=30000.0, params=None):
     ## Params for quality metrics
     if params is None:
         params = {}
@@ -176,7 +176,7 @@ def calcQualityMetrics(dirname, wfamp, epochs=None, fs=30000.0, params=None):
     amplitudes = np.ravel(np.load(os.path.join(dirname,'amplitudes.npy'), allow_pickle=True))
     cluster_info = pd.read_csv(os.path.join(dirname,'cluster_info.tsv'), sep='\t')
     total_units = len(np.unique(spike_clusters))
-    if epochs is None:
+    if epoch is None:
         epoch = [0, spike_times[-1]]
     in_epoch = (spike_times > epoch[0]) * (spike_times < epoch[-1])
     
@@ -205,9 +205,9 @@ def calcQualityMetrics(dirname, wfamp, epochs=None, fs=30000.0, params=None):
     pratioflag = (metrics['presence_ratio']>=params['presence_ratio']) 
     frflag = (metrics['firing_rate']>=params['firing_rate_th']) 
     cluqualflag = (metrics['group']=='good')
-    ampflag = (metrics['amp_cutoff']<=params['amp_cutoff_th']) 
+#    ampflag = (metrics['amp_cutoff']<=params['amp_cutoff_th']) 
     absampflag = (wfamp>=params['amp_th'])
-    isGoodCluster = isiflag & pratioflag & frflag & ampflag & cluqualflag & absampflag
+    isGoodCluster = isiflag & pratioflag & frflag & cluqualflag & absampflag #& ampflag 
     metrics['isGood'] = isGoodCluster
     print('Number of Good cluster: ' + str(np.sum(isGoodCluster)))
     
