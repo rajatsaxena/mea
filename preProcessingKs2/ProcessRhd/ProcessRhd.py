@@ -257,6 +257,7 @@ analog_in = None
 dig_in = None
 amp_data_mmap = None
 amp_ts_mmap = None
+binarydatlength = 0
 files = natsorted(glob.glob(os.path.join(dirname,rawfname,'*.rhd')))
 for i, filename in enumerate(files):
     if i==0:
@@ -279,14 +280,15 @@ for i, filename in enumerate(files):
             amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
             print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
             size = amp_data_n.shape[1]
-            ind = np.arange(0,size,subsamplingfactor)
-            ts = ts[ind]
-            fs = fs/float(subsamplingfactor)
+            binarydatlength = binarydatlength + size
             amp_ts_mmap = ts
-            starts = amp_ts_mmap[-1]+1./fs
             amp_data = np.apply_along_axis(decimateSig,1,amp_data_n)
             amp_data = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = amp_data
+            ind = np.arange(0,size,subsamplingfactor)
+            ts = ts[ind]
+            fs = 1./np.nanmedian(np.diff(ts))
+            starts = amp_ts_mmap[-1]+1./fs
             del amp_data_n
     else:
         print("\n ***** Loading: " + filename)
@@ -307,17 +309,21 @@ for i, filename in enumerate(files):
             amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
             print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
             size = amp_data_n.shape[1]
-            startind = np.where(ts>=starts)[0][0]
+            binarydatlength = binarydatlength + size
+            try:
+                startind = np.where(ts>=starts)[0][0]
+            except IndexError:
+                startind = 0
             ind = np.arange(startind,size,subsamplingfactor)
             ts = ts[ind]
-            fs = fs/float(subsamplingfactor)
+            fs = 1./np.nanmedian(np.diff(ts))
             starts = ts[-1]+1./fs
             amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n[:,startind:])
             amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = np.concatenate((amp_data_mmap, amp_data_n), 1)
             dig_in = np.array(np.concatenate((dig_in, digIN)), dtype='uint8')
             analog_in = np.concatenate((analog_in, analogIN[0]), dtype=np.float32)
-        #amp_ts_mmap = np.concatenate((amp_ts_mmap, ts))
+            amp_ts_mmap = np.concatenate((amp_ts_mmap, ts))
 if saveLFP:
     np.save(lfp_filename, amp_data_mmap)
     #np.save(lfpts_filename, amp_ts_mmap)
