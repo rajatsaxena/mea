@@ -1,7 +1,6 @@
 # mea
 McNaughton lab ephys data analysis. \
-Note that many of these scripts are modified from different sources such as Allen Institute, IBL, cortex-lab, Intan, NWB, etc. \
-I have tried to give credit whenever possible.
+Note that many of these scripts are modified from different sources such as Allen Institute, IBL, cortex-lab, Intan, NWB, etc. I've tried to give credit whenever possible.
 
 
 * preprocessingKs2:
