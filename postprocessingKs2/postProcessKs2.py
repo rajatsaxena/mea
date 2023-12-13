@@ -44,7 +44,7 @@ filename = epochsdf['file_name']
 start_time, end_time = epochsdf['start_time'], epochsdf['end_time']
 
 # loop through all directories
-for dname, st, et in zip(filename, start_time, end_time):
+for dname, st, et in zip(filename[9:], start_time[9:], end_time[9:]):
     print('Processing ' + str(dname))
     dname = os.path.join(dirname,dname)
     
@@ -63,7 +63,7 @@ for dname, st, et in zip(filename, start_time, end_time):
     else:
         bin_file = [file for file in os.listdir(dname) if file.endswith('.bin')]
         bin_file = bin_file[0]
-        rawData = np.memmap(bin_file, dtype='int16', mode='r')
+        rawData = np.memmap(os.path.join(dname, bin_file), dtype='int16', mode='r')
     data = np.reshape(rawData, (int(rawData.size/num_channels), num_channels))
     del rawData
     print('Finished loading raw binary file..')
@@ -72,6 +72,7 @@ for dname, st, et in zip(filename, start_time, end_time):
     waveforms, wfMetrics = uwm.extract_waveforms(data, spike_times, spike_clusters, templates, cluster_info['cluster_id'], cluster_info['ch'], channel_map, bit_volts, fs, vertical_site_spacing, params)
     wfMetrics = wfMetrics.reset_index(drop=True)
     print('Finished loading waveform metrics..')
+    del data
     
     # load cluster quality metrics
     cluMetrics, spiketimesGood, spikeclustersGood = ucq.calcQualityMetrics(dname, wfMetrics['amp'], epoch=[st,et], params=qualParams)
@@ -79,6 +80,7 @@ for dname, st, et in zip(filename, start_time, end_time):
     
     # concatenate data
     metrics = pd.merge(wfMetrics, cluMetrics, on="cluster_id", how="left")
+    metrics = metrics[metrics['group']=='good']
     del cluMetrics, wfMetrics
     
     # store data
