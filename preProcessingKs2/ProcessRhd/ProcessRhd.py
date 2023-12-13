@@ -274,19 +274,20 @@ for i, filename in enumerate(files):
         arr2 = np.memmap(filename[:-4]+'_PPC_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
         arr2[:] = amp_data_n[256:,:].T
         del arr2
-        # convert microvolts for lfp conversion
-        amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
-        print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
-        size = amp_data_n.shape[1]
-        ind = np.arange(0,size,subsamplingfactor)
-        amp_data = np.apply_along_axis(decimateSig,1,amp_data_n)
-        amp_data = np.apply_along_axis(decimateSig2,1,amp_data_n)
-        del amp_data_n
-        ts = ts[ind]
-        fs = fs/float(subsamplingfactor)
-        amp_data_mmap = amp_data
-        amp_ts_mmap = ts
-        starts = amp_ts_mmap[-1]+1./fs
+        if saveLFP:
+            # convert microvolts for lfp conversion
+            amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
+            print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
+            size = amp_data_n.shape[1]
+            ind = np.arange(0,size,subsamplingfactor)
+            ts = ts[ind]
+            fs = fs/float(subsamplingfactor)
+            amp_ts_mmap = ts
+            starts = amp_ts_mmap[-1]+1./fs
+            amp_data = np.apply_along_axis(decimateSig,1,amp_data_n)
+            amp_data = np.apply_along_axis(decimateSig2,1,amp_data_n)
+            amp_data_mmap = amp_data
+            del amp_data_n
     else:
         print("\n ***** Loading: " + filename)
         ts, amp_data, digIN, analogIN, fs = read_data(os.path.join(dirname,filename))    
@@ -301,18 +302,18 @@ for i, filename in enumerate(files):
         arr2 = np.memmap(filename[:-4]+'_PPC_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
         arr2[:] = amp_data_n[256:,:].T
         del arr2
-        # convert microvolts for lfp conversion
-        amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
-        print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
-        size = amp_data_n.shape[1]
-        startind = np.where(ts>=starts)[0][0]
-        ind = np.arange(startind,size,subsamplingfactor)
-        amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n[:,startind:])
-        amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
-        ts = ts[ind]
-        fs = fs/float(subsamplingfactor)
-        starts = ts[-1]+1./fs
         if saveLFP:
+            # convert microvolts for lfp conversion
+            amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
+            print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
+            size = amp_data_n.shape[1]
+            startind = np.where(ts>=starts)[0][0]
+            ind = np.arange(startind,size,subsamplingfactor)
+            ts = ts[ind]
+            fs = fs/float(subsamplingfactor)
+            starts = ts[-1]+1./fs
+            amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n[:,startind:])
+            amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = np.concatenate((amp_data_mmap, amp_data_n), 1)
             dig_in = np.array(np.concatenate((dig_in, digIN)), dtype='uint8')
             analog_in = np.concatenate((analog_in, analogIN[0]), dtype=np.float32)
