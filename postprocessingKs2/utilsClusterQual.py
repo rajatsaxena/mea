@@ -209,7 +209,7 @@ def calcQualityMetrics(dirname, wfamp, epoch=None, fs=30000.0, params=None):
     absampflag = (wfamp>=params['amp_th'])
     isGoodCluster = isiflag & pratioflag & frflag & cluqualflag & absampflag #& ampflag 
     metrics['isGood'] = isGoodCluster
-    print('Number of Good cluster: ' + str(np.sum(isGoodCluster)))
+#    print('Number of Good cluster: ' + str(np.sum(isGoodCluster)))
     
     # save spiketimes and spikeclusters
     goodCluId = np.array(metrics['cluster_id'][metrics['isGood']])
