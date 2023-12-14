@@ -22,7 +22,7 @@ fs = 30000.0
 params = {}
 params['samples_per_spike'] = 82
 params['pre_samples'] = 20
-params['spikes_per_epoch'] = 500
+params['spikes_per_epoch'] = 250
 params['upsampling_factor'] = 200/82
 params['spread_threshold'] = 0.12
 
@@ -30,7 +30,7 @@ params['spread_threshold'] = 0.12
 qualParams = {} 
 qualParams['isi_threshold']=0.002
 qualParams['min_isi']=0.0001
-qualParams['isi_viol_th'] = 0.3 # 30% contamination
+qualParams['isi_viol_th'] = 0.2 # 20% contamination
 qualParams['presence_ratio'] = 0.7 # firing in 70% of behavior epochs
 qualParams['firing_rate_th'] = 0.01  # firing rate above 0.01 Hz
 #qualParams['amp_cutoff_th'] = 0.2 # missing only 20% of spikes below threshold
@@ -44,7 +44,8 @@ filename = epochsdf['file_name']
 start_time, end_time = epochsdf['start_time'], epochsdf['end_time']
 
 # loop through all directories
-for dname, st, et in zip(filename[9:], start_time[9:], end_time[9:]):
+for dname, st, et in zip(filename, start_time, end_time):
+    print('.........')
     print('Processing ' + str(dname))
     dname = os.path.join(dirname,dname)
     
@@ -74,14 +75,21 @@ for dname, st, et in zip(filename[9:], start_time[9:], end_time[9:]):
     print('Finished loading waveform metrics..')
     del data
     
+    # load cellexplorer metrics file
+    if os.path.exists(os.path.join(dname, 'proc-CellExplorerMetrics.csv')):
+        ceMetrics = pd.read_csv(os.path.join(dname, 'proc-CellExplorerMetrics.csv'))
+        ceMetrics = ceMetrics.rename(columns={"cluID": "cluster_id"})
+    print('Finished loading cell explorer metrics..')
+    
     # load cluster quality metrics
-    cluMetrics, spiketimesGood, spikeclustersGood = ucq.calcQualityMetrics(dname, wfMetrics['amp'], epoch=[st,et], params=qualParams)
+    cluMetrics, spiketimesGood, spikeclustersGood = ucq.calcQualityMetrics(dname, wfamp=wfMetrics['amp'], ampCE=None, epoch=[st,et], params=qualParams) #
     print('Finished loading cluster quality metrics..')
     
     # concatenate data
     metrics = pd.merge(wfMetrics, cluMetrics, on="cluster_id", how="left")
     metrics = metrics[metrics['group']=='good']
-    del cluMetrics, wfMetrics
+    metrics = pd.merge(metrics, ceMetrics, on="cluster_id", how="left")
+    del cluMetrics, wfMetrics, ceMetrics
     
     # store data
     print('Number of good clusters: ' + str(sum(metrics['isGood'])))
@@ -115,3 +123,4 @@ for dname, st, et in zip(filename[9:], start_time[9:], end_time[9:]):
     plt.tight_layout()
     plt.savefig(os.path.join(dname,'proc-probemap.png'), dpi=200)
     print('Finished plotting probe map data..')
+    print('.........')

@@ -158,7 +158,7 @@ def calcAmpCutoff(amplitudes, num_histogram_bins = 500, histogram_smoothing_valu
 
 
 # function to calculate quality metrics
-def calcQualityMetrics(dirname, wfamp, epoch=None, fs=30000.0, params=None):
+def calcQualityMetrics(dirname, wfamp=None, ampCE=None, epoch=None, fs=30000.0, params=None):
     ## Params for quality metrics
     if params is None:
         params = {}
@@ -205,8 +205,11 @@ def calcQualityMetrics(dirname, wfamp, epoch=None, fs=30000.0, params=None):
     pratioflag = (metrics['presence_ratio']>=params['presence_ratio']) 
     frflag = (metrics['firing_rate']>=params['firing_rate_th']) 
     cluqualflag = (metrics['group']=='good')
+    if wfamp is not None:
+        absampflag = (wfamp>=params['amp_th'])
+    else:
+        absampflag = (ampCE>=params['amp_th'])
 #    ampflag = (metrics['amp_cutoff']<=params['amp_cutoff_th']) 
-    absampflag = (wfamp>=params['amp_th'])
     isGoodCluster = isiflag & pratioflag & frflag & cluqualflag & absampflag #& ampflag 
     metrics['isGood'] = isGoodCluster
 #    print('Number of Good cluster: ' + str(np.sum(isGoodCluster)))
