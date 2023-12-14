@@ -282,9 +282,9 @@ for i, filename in enumerate(files):
             size = amp_data_n.shape[1]
             binarydatlength = binarydatlength + size
             amp_ts_mmap = ts
-            amp_data = np.apply_along_axis(decimateSig,1,amp_data_n)
-            amp_data = np.apply_along_axis(decimateSig2,1,amp_data_n)
-            amp_data_mmap = amp_data
+            amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n)
+            amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
+            amp_data_mmap = amp_data_n
             ind = np.arange(0,size,subsamplingfactor)
             ts = ts[ind]
             fs = 1./np.nanmedian(np.diff(ts))
@@ -293,6 +293,8 @@ for i, filename in enumerate(files):
     else:
         print("\n ***** Loading: " + filename)
         ts, amp_data, digIN, analogIN, fs = read_data(os.path.join(dirname,filename))    
+        dig_in = np.array(np.concatenate((dig_in, digIN)), dtype='uint8')
+        analog_in = np.concatenate((analog_in, analogIN[0]), dtype=np.float32)
         amp_data_n  = []
         for c in range(amp_data.shape[0]):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
@@ -311,7 +313,7 @@ for i, filename in enumerate(files):
             size = amp_data_n.shape[1]
             binarydatlength = binarydatlength + size
             try:
-                startind = np.where(ts>=starts)[0][0]
+                startind = np.where(ts>starts)[0][0]
             except IndexError:
                 startind = 0
             ind = np.arange(startind,size,subsamplingfactor)
@@ -321,9 +323,9 @@ for i, filename in enumerate(files):
             amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n[:,startind:])
             amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = np.concatenate((amp_data_mmap, amp_data_n), 1)
-            dig_in = np.array(np.concatenate((dig_in, digIN)), dtype='uint8')
-            analog_in = np.concatenate((analog_in, analogIN[0]), dtype=np.float32)
             amp_ts_mmap = np.concatenate((amp_ts_mmap, ts))
+            if i==5:
+                dadada
 if saveLFP:
     np.save(lfp_filename, amp_data_mmap)
     #np.save(lfpts_filename, amp_ts_mmap)
