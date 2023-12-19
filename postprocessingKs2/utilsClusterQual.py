@@ -199,20 +199,20 @@ def calcQualityMetrics(dirname, wfamp=None, ampCE=None, epoch=None, fs=30000.0, 
     metrics['depth'] = cluster_info['depth']
     metrics['ch'] = cluster_info['ch']
     metrics['num_spikes'] = cluster_info['n_spikes']
+    metrics = metrics[metrics['group']=='good']
     
     # find good cell based on cutoff
     isiflag = (metrics['isi_viol']<=params['isi_viol_th']) 
     pratioflag = (metrics['presence_ratio']>=params['presence_ratio']) 
     frflag = (metrics['firing_rate']>=params['firing_rate_th']) 
-    cluqualflag = (metrics['group']=='good')
     if wfamp is not None:
         absampflag = (wfamp>=params['amp_th'])
     else:
         absampflag = (ampCE>=params['amp_th'])
 #    ampflag = (metrics['amp_cutoff']<=params['amp_cutoff_th']) 
-    isGoodCluster = isiflag & pratioflag & frflag & cluqualflag & absampflag #& ampflag 
+    isGoodCluster = isiflag & pratioflag & frflag & list(absampflag) #& ampflag 
     metrics['isGood'] = isGoodCluster
-#    print('Number of Good cluster: ' + str(np.sum(isGoodCluster)))
+    print('Number of Good cluster: ' + str(np.sum(isGoodCluster)))
     
     # save spiketimes and spikeclusters
     goodCluId = np.array(metrics['cluster_id'][metrics['isGood']])
