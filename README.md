@@ -17,3 +17,6 @@ Note that many of these scripts are modified from different sources such as Alle
   * behavutils.py: supplement utils for processing behavior .mat tile output from smoothwalk
   * analyzeBehavFinal.py: file to process SWIL behavior data and save npy with behavior for each environments and aligned intan timestamps
   * plotBehaviorAll.py: plot speed across all VR environments pooled across all animals
+
+* LFP: scripts for SWIL lfp data analysis
+  * decimateLFP_fs24.py.py: script to decimate LFPs by 24x for all recorded channels
