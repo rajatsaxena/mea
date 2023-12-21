@@ -79,6 +79,7 @@ def processBehavFile(garr, samplerate=30, VRradius=50, intants=None):
     garrN['poscm'] = poscm
     garrN['time'] = time
     # routine to align intan and pos change file
+    # we need movement data only, no stops
     posChange = np.ediff1d(garrN['pos'])
     posChangeDiffIdx = np.where(posChange!=0)[0]
     garrN = garrN.iloc[posChangeDiffIdx]
