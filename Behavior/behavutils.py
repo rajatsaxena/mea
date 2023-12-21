@@ -10,6 +10,30 @@ import scipy.io as spio
 import scipy.stats as spst
 import matplotlib.pyplot as plt
 
+# load intan timestamps
+def loadintants(filename, fs = 30000.0, stidx=None, etidx=None):
+    dig_data = np.array(np.load(filename, mmap_mode='r'), 'float32')
+    # create timestamp matrix   
+    numSamples = len(dig_data)
+    dt = 1./fs
+    ts = np.arange(0,numSamples*dt,dt)
+    # load the digital datapoints
+    idx = np.where(dig_data<2)[0]
+    dig_data[idx] = dig_data[idx] + 2
+    # **************************************************find 1st transition point
+    diff_dig_data = np.ediff1d(dig_data) 
+    # find all the transition datasets
+    movement_ind1 = np.where(diff_dig_data==1)[0]
+    movement_ind2 = np.where(diff_dig_data==-1)[0]
+    movement_ind = np.sort(np.concatenate((movement_ind1, movement_ind2)))
+    # movement change timestamps
+    intan_aligned_ts = ts[movement_ind]
+    if stidx is not None:
+        intan_aligned_ts = intan_aligned_ts[stidx:]
+    if etidx is not None:
+        intan_aligned_ts = intan_aligned_ts[:etidx]
+    del dig_data
+    return intan_aligned_ts
 
 # read behavior file
 def readBehavFile(dirname):
@@ -46,15 +70,20 @@ def processBehavFile(garr, samplerate=30, VRradius=50, intants=None):
     for st,et in zip(HallChangeStartidx,HallChangeEndidx):
         lapnum[st:et+1] = lapn
         lapn+=1
+    # create dataframe with all variables
     garrN = pd.DataFrame(garr, columns=['rev','vel','rew','lick','position','obj','hallnum','systime'])
     garrN['vel'] = np.array(vel, dtype=np.float32)
     garrN['rew'] = np.array(reward, dtype=np.float32)
     garrN['lapnum'] = lapnum
     garrN['pos'] = pos
     garrN['poscm'] = poscm
-    if intants is None:
-        garrN['time'] = time
-    else:
+    garrN['time'] = time
+    # routine to align intan and pos change file
+    posChange = np.ediff1d(garrN['pos'])
+    posChangeDiffIdx = np.where(posChange!=0)[0]
+    garrN = garrN.iloc[posChangeDiffIdx]
+    garrN = garrN.reset_index(drop=True)
+    if intants is not None:
         garrN['time'] = intants
         vel = np.diff(poscm)/np.diff(intants)
         vel = np.insert(vel,0,np.nan)
