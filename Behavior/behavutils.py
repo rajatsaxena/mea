@@ -35,6 +35,12 @@ def loadintants(filename, fs = 30000.0, stidx=None, etidx=None):
     del dig_data
     return intan_aligned_ts
 
+
+# normalize 1d array bw 0 and 1
+def norm1D(arr):
+    return (arr - np.nanmin(arr)) / (np.nanmax(arr) - np.nanmin(arr))
+
+
 # read behavior file
 def readBehavFile(dirname):
     # load the raw data
@@ -84,12 +90,12 @@ def processBehavFile(garr, samplerate=30, VRradius=50, intants=None):
     posChangeDiffIdx = np.where(posChange!=0)[0]
     garrN = garrN.iloc[posChangeDiffIdx]
     garrN = garrN.reset_index(drop=True)
+    garrN = garrN.drop(columns=['rev', 'lick', 'systime','position'])
     if intants is not None:
         garrN['time'] = intants
-        vel = np.diff(poscm)/np.diff(intants)
+        vel = np.diff(garrN['poscm'])/np.diff(intants)
         vel = np.insert(vel,0,np.nan)
         garrN['vel'] = vel
-    garrN = garrN.drop(columns=['rev', 'lick', 'systime','position'])
     return garrN
 
 
