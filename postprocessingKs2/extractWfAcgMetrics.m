@@ -65,20 +65,20 @@ for i=1:length(fnames)
     dat.cluID = spikes.cluID';
     dat.cellType = putativeCellType';
     dat.ampCE = spikes.peakVoltage';
-    dat.thetaModIndex = acg_metrics.thetaModulationIndex';
-    dat.burstIndex_Royer = acg_metrics.burstIndex_Royer2012';
-    dat.burstIndex_Doublets = acg_metrics.burstIndex_Doublets';
-    dat.polarity = waveform_metrics.polarity';
+    dat.acgRiseTime = fit_params.acg_tau_rise';
     dat.peakToTrough = waveform_metrics.peaktoTrough';
     dat.troughToPeak = waveform_metrics.troughtoPeak';
+    dat.abRatio = waveform_metrics.ab_ratio';
+    dat.polarity = waveform_metrics.polarity';
     dat.derivative = waveform_metrics.derivative_TroughtoPeak';
     dat.peakA = waveform_metrics.peakA';
     dat.peakB = waveform_metrics.peakB';
-    dat.abRatio = waveform_metrics.ab_ratio';
     dat.trough = waveform_metrics.trough';
-    dat.acgRiseTime = fit_params.acg_tau_rise';
+    dat.thetaModIndex = acg_metrics.thetaModulationIndex';
+    dat.burstIndex_Royer = acg_metrics.burstIndex_Royer2012';
+    dat.burstIndex_Doublets = acg_metrics.burstIndex_Doublets';
     dat = struct2table(dat);
-    opfname = fullfile(analysisdirpath,'proc-CellExplorerMetrics.csv');
+    opfname = fullfile(basepath, 'analyzedMetrics', strcat(fname,'-CellExplorerUnitMetrics.csv'));
     writetable(dat,opfname);
     clear dat
 end
