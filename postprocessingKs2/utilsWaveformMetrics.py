@@ -185,6 +185,7 @@ def read_cluster_group_tsv(filename):
     return cluster_ids, cluster_quality
 
 def load_kilosort_data(folder,  sample_rate = None, convert_to_seconds = True, template_zero_padding= 21):
+    ampltiude = np.ravel(load(folder,'amplitudes.npy'))
     spike_times = load(folder,'spike_times.npy')
     spike_clusters = load(folder,'spike_clusters.npy')
     spike_templates = load(folder, 'spike_templates.npy')
@@ -206,7 +207,7 @@ def load_kilosort_data(folder,  sample_rate = None, convert_to_seconds = True, t
     for temp_idx in range(templates.shape[0]):
         unwhitened_temps[temp_idx,:,:] = np.dot(np.ascontiguousarray(templates[temp_idx,:,:]),np.ascontiguousarray(unwhitening_mat))
                     
-    return spike_times, spike_clusters, unwhitened_temps, channel_map, cluster_ids, cluster_info
+    return ampltiude, spike_times, spike_clusters, unwhitened_temps, channel_map, cluster_ids, cluster_info
 
 
 
