@@ -12,6 +12,7 @@ Note that many of these scripts are modified from different sources such as Alle
   * utilsWaveformMetrics.py: functions for calculating waveform metrics (amplitude, peak-to-trough, repolarization slope, spread)
   * postProcessKs2.py: functions for running postprocess kilosort quality checks and saving final processed metrics
   * extractWfAcgMetrics.m: matlab scripts based on CellExplorer (Petersen et al., 2021) to extract waveform and autocorrelogram metrics
+  * plotPooledMetrics.py: script to save pooled unit metrics for all animals and save waveform metrics figure for putative excitatory & inhibitory neuron
     
 * **Behavior**: scripts for SWIL behavior data analysis
   * behavutils.py: supplement utils for processing behavior .mat tile output from smoothwalk
