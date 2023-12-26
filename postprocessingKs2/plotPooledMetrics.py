@@ -22,7 +22,6 @@ fs = 30000.0
 
 # waveform properties
 troughToPeak = []
-cellType = []
 duration = []
 waveforms = []
 
@@ -42,11 +41,6 @@ for i,fname in enumerate(filename):
     peak_channel = list(np.array(df['ch'], dtype='int'))
     duration.extend(df['duration'])
     troughToPeak.extend(df['troughToPeak'])
-    ctype = np.array(df['cellType'])
-    ctype[ctype=='Pyramidal Cell']=0
-    ctype[ctype=='Wide Interneuron']=1
-    ctype[ctype=='Narrow Interneuron']=2
-    cellType.extend(list(ctype))
     
     # load and save raw waveforms
     wf = np.load(os.path.join(dirname, fname, 'proc-waveforms.npy'))
@@ -60,7 +54,6 @@ for i,fname in enumerate(filename):
         waveforms = np.concatenate((waveforms, wfmean))
 duration = np.array(duration)
 troughToPeak = np.array(troughToPeak)
-cellType = np.array(cellType)
 waveforms = np.array(waveforms)
 maindf = maindf.reset_index(drop=True)
 maindf = maindf.loc[:, ~maindf.columns.str.contains('^Unnamed')]
