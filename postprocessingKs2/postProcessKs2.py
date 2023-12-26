@@ -102,34 +102,34 @@ for dname, st, et in zip(filename, start_time, end_time):
     
     # store data
     print('Number of good clusters: ' + str(sum(metrics['isGood'])))
-#    metrics.to_csv(os.path.join(dirname, 'analyzedMetrics', aname+'-UnitMetrics.csv'))
-#    np.save(os.path.join(dname,'proc-waveforms.npy'), waveforms)
-#    np.save(os.path.join(dname,'proc-spiketimes.npy'), spiketimesGood)
-#    np.save(os.path.join(dname,'proc-spikeclusters.npy'), spikeclustersGood)
-#    print('Finished saving processed ' + str(dname))
-#    
-#    # get good cluster x and y position
-#    cluster_xpos = []
-#    cluster_ypos = []
-#    good_clusters_channel_index = []
-#    for cnum in metrics[metrics['isGood']]['ch']:
-#        good_clusters_channel_index.append((np.where(cnum==channel_map)[0][0]))
-#        cluster_xpos = np.array(channel_positionsX[good_clusters_channel_index])
-#        cluster_ypos = np.array(channel_positionsY[good_clusters_channel_index]*0.001)
-#    
-#    # plot data
-#    fig = plt.figure(figsize=(6,10))
-#    plt.scatter(channel_positionsX, channel_positionsY*0.001, c='gray', marker='s', alpha=0.25)
-#    plt.scatter(cluster_xpos+np.random.uniform(-0.01,0.01,len(cluster_xpos)), 
-#                cluster_ypos+np.random.uniform(-0.01,0.01,len(cluster_ypos)), 
-#                c='b', s=20, cmap='plasma')
-#    plt.xlabel('Channel X Position', fontsize=16)
-#    plt.ylabel('Deep -> Sup layers (mm)', fontsize=16)
-#    for pos in ['right','top']:
-#        plt.gca().spines[pos].set_visible(False)
-#    plt.title('N='+str(sum(metrics['isGood'])), fontsize=18)
-#    plt.grid(False)
-#    plt.tight_layout()
-#    plt.savefig(os.path.join(dname,'proc-probemap.png'), dpi=200)
-#    print('Finished plotting probe map data..')
-#    print('.........')
+    metrics.to_csv(os.path.join(dirname, 'analyzedMetrics', aname+'-UnitMetrics.csv'))
+    np.save(os.path.join(dname,'proc-waveforms.npy'), waveforms)
+    np.save(os.path.join(dname,'proc-spiketimes.npy'), spiketimesGood)
+    np.save(os.path.join(dname,'proc-spikeclusters.npy'), spikeclustersGood)
+    print('Finished saving processed ' + str(dname))
+    
+    # get good cluster x and y position
+    cluster_xpos = []
+    cluster_ypos = []
+    good_clusters_channel_index = []
+    for cnum in metrics[metrics['isGood']]['ch']:
+        good_clusters_channel_index.append((np.where(cnum==channel_map)[0][0]))
+        cluster_xpos = np.array(channel_positionsX[good_clusters_channel_index])
+        cluster_ypos = np.array(channel_positionsY[good_clusters_channel_index]*0.001)
+    
+    # plot data
+    fig = plt.figure(figsize=(6,10))
+    plt.scatter(channel_positionsX, channel_positionsY*0.001, c='gray', marker='s', alpha=0.25)
+    plt.scatter(cluster_xpos+np.random.uniform(-0.01,0.01,len(cluster_xpos)), 
+                cluster_ypos+np.random.uniform(-0.01,0.01,len(cluster_ypos)), 
+                c='b', s=20, cmap='plasma')
+    plt.xlabel('Channel X Position', fontsize=16)
+    plt.ylabel('Deep -> Sup layers (mm)', fontsize=16)
+    for pos in ['right','top']:
+        plt.gca().spines[pos].set_visible(False)
+    plt.title('N='+str(sum(metrics['isGood'])), fontsize=18)
+    plt.grid(False)
+    plt.tight_layout()
+    plt.savefig(os.path.join(dname,'proc-probemap.png'), dpi=200)
+    print('Finished plotting probe map data..')
+    print('.........')
