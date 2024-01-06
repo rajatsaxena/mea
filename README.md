@@ -15,9 +15,15 @@ Note that many of these scripts are modified from different sources such as Alle
   * plotPooledMetrics.py: script to save pooled unit metrics for all animals and save waveform metrics figure for putative excitatory & inhibitory neuron
     
 * **Behavior**: scripts for SWIL behavior data analysis
-  * behavutils.py: supplement utils for processing behavior .mat tile output from smoothwalk
+  * behavutils.py: supplement utils for processing behavior .mat file output from smoothwalk
   * analyzeBehavFinal.py: file to process SWIL behavior data and save npy with behavior for each environments and aligned intan timestamps
   * plotBehaviorAll.py: plot speed across all VR environments pooled across all animals
 
 * **LFP**: scripts for SWIL lfp data analysis
   * decimateLFP_fs24.py.py: script to decimate LFPs by 24x for all recorded channels
+
+* **Ratemaps** : scripts for generating rate for SWIL project
+  * mea.py: script with utils functions
+  * detect_peaks.npy: script to detect peaks (similar to matlab)
+  * rmaputils.py: utils for generating ratemaps
+  * mainRatemaps.py: file to generate and store ratemaps and save processed data
