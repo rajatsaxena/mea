@@ -7,10 +7,15 @@ Created on Mon Oct 19 02:37:57 2020
 """
 
 import os
-import bisect, mea
+import bisect, sys
 import numpy as np
 import scipy.ndimage as scnd
 import skimage.measure as measure
+from itertools import repeat
+from multiprocessing import Pool
+
+sys.path.append('../LFP')
+import mea
 from detect_peaks import detect_peaks
 
 #Find rightmost value less than or equal to x
@@ -232,6 +237,67 @@ def calcSpatialInformationScore(rateMap, occmap):
         si = np.nan
     return np.round(si,2)
 
+# calclate shuffled spatial info
+def calcShuffledSI(idx, observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
+    #get a lag from 15seconds to behavior duration - 15seconds
+    lag = np.random.uniform(15, (endTime-startTime-15), 1)[0]
+    #add the lag to generate timestamps
+    newSpikeTimestamps = spikets + lag
+    #remove spike timestamps which do not fall in maze time
+    #find the indices where spiketimestamps exceed end maze time
+    shuffledSpikeTimestamps = posT[0] + (newSpikeTimestamps - posT[0]) % (posT[-1] - posT[0])
+    # function to process spike pos data
+    spikepos, _, _, spikepostrial, _ = processSpikePos(shuffledSpikeTimestamps, trialStart, trialEnd, posX, posT, posSpeed)
+    # generate spike map across trials
+    _, _, _, _, spikemap1dsm = processSpikeMap(spikepostrial, spikepos, occmapbins, posMin=posMin, posMax=posMax, binwidth=binwidth)
+    ratemap1dsm = (spikemap1dsm/occmap1d)*fs
+    si = calcSpatialInformationScore(ratemap1dsm, occmap1d)
+    return si
+
+
+
+# calclate shuffled spatial info by shuffling for individual trials
+def calcShuffledSIByTrial(idx, observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
+    spkmaptrials = []
+    for ts,te in zip(trialStart, trialEnd):
+        #get a lag from 15seconds to behavior duration - 15seconds
+        lag = np.random.uniform(1, (te-ts), 1)[0]
+        spk = spikets[(spikets>=ts) & (spikets<=te)]
+        #remove spike timestamps which do not fall in maze time
+        shuffledSpikeTimestamps = ts + (spk + lag - ts) % (te-ts)
+        # get spike pos
+        spkpos = []
+        for sst in shuffledSpikeTimestamps:
+            if sst>=ts and sst<=te:
+                ind, val = binarySearch(posT, sst)
+                spkpos.append(posX[ind])
+        spkpos = np.array(spkpos)
+        # function to process spike pos data
+        spikecnt, _ = np.histogram(spkpos, np.arange(posMin,posMax+binwidth,binwidth))
+        spkmaptrials.append(spikecnt)
+    spkmaptrials = np.array(spkmaptrials, dtype='float')
+    spkmaptrials[np.isnan(spkmaptrials)] = 0.0
+    # smoothed spike map across trials
+    spkmaptrialsm = np.apply_along_axis(filter_1d, 1, spkmaptrials)
+    spkmaptrialsm[np.isnan(spkmaptrialsm)] = 0.0
+    spikemap1dsm = np.nanmean(spkmaptrialsm,0)
+    ratemap1dsm = (spikemap1dsm/occmap1d)*fs
+    si = calcSpatialInformationScore(ratemap1dsm, occmap1d)
+    return si
+
+# function to get shuffled spatial information
+def calcShuffleSpatialInfo(observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed,  occmapbins, posMin=0, posMax=314, binwidth=4, fs=30.):
+    idx = np.arange(500)
+    from multiprocessing.dummy import Pool as ThreadPool
+    pool = ThreadPool(10)
+    shuffledsi = pool.starmap(calcShuffledSIByTrial, zip(idx, repeat(observedSI), repeat(spikets), repeat(occmap1d), 
+                                             repeat(endTime), repeat(startTime), repeat(trialStart), 
+                                             repeat(trialEnd), repeat(posX), repeat(posT), repeat(posSpeed), 
+                                             repeat(occmapbins))) 
+    pool.close() 
+    pool.join()
+    return 1 - np.nansum(observedSI>shuffledsi)/len(shuffledsi), np.array(shuffledsi)
+
 # get sparsity calculation
 def calcSparsity(rmap, rmaptrials):
     sparsity = np.nanmean(rmap)**2/ np.nanmean(rmap**2)
@@ -249,6 +315,102 @@ def calcStabilityIndex(rmaptrials):
     corr_[np.tril_indices(corr_.shape[0], -1)] = np.nan
     stabilityInd = np.nanmean(corr_)
     return np.round(stabilityInd,4)
+
+# rotate place map
+def rotatedPlacemap(rmap, rmaptrial):
+    valleyind = detect_peaks(rmap, mph=-2, valley=True)
+    if len(valleyind):
+        if len(valleyind)>=2:
+            valleyind = valleyind[1]
+        else:
+            valleyind = valleyind[0]
+        rmap = np.roll(rmap,-valleyind)
+        rmaptrial = np.roll(rmaptrial, -valleyind, axis=1) 
+    return rmap, rmaptrial, valleyind
+
+# field size determination
+def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=5, pixel2cm=4, L=314):
+    rmap = rmap - np.nanmin(rmap)
+    placemap = np.zeros(len(rmap))
+    placemap[np.where(rmap >= thresholdrate)] = 1 #same as mosers' 1hz threshold
+    placemap = measure.label(placemap)
+    placemap = measure.label(placemap, background=0)
+    numfields = np.max(placemap) #find num of fields
+    placeFieldsPeakFr = []
+    placeFieldsCenter = []
+    placeFieldsSize = []    
+    ##lets try to find center of the peaks
+    for i in range(1,numfields+1):
+        fieldPixels = np.where(placemap==i)
+        fieldpeak = max(rmap[fieldPixels])
+        #fall off of firing rate to 15% PFR field
+        fieldthreshold = max(peakfallTh*fieldpeak, thresholdrate/2.)
+        #indixes where firing rate is less than 15%
+        fieldsizecutoffind = np.where(rmap[fieldPixels]<fieldthreshold)
+        #remove fields samller than 15cm and field peak firing rate less than 
+        #1hz and field PFR less than 15% of the max firing rate of the neuron
+        if len(fieldPixels[0])<fieldcutoff/pixel2cm or fieldpeak<fieldpeakFr:
+            placemap[fieldPixels]=0
+        #shorten the field size using the 15% fall off threshold
+        if len(fieldsizecutoffind[0])>0:
+            placemap[fieldPixels[0][fieldsizecutoffind[0]]]=0
+            fieldsizecutoffind1 = np.where(rmap[fieldPixels]>=fieldthreshold)
+            fieldPixels = np.array([fieldPixels[0][fieldsizecutoffind1[0]]]) 
+    #retiteration after shortening things downs
+    placemap = measure.label(placemap)
+    placemap = measure.label(placemap, background=0)
+    numFields = np.max(placemap)
+    newplacemap = np.zeros(placemap.shape)
+    #save the field peak firing rate, peak indices, size after all the criteria 
+    #this can be improved further
+    fieldnum = 0
+    for i in np.arange(1,numFields+1):
+        fieldPixels = np.where(placemap==i)
+        fieldpeak = max(rmap[fieldPixels])
+        # check if the cell fire in more than 1/3 of the total laps
+        # and is greater than 10 laps
+        countlaps=0
+        for rt in rmaptrial:
+            lappeakfr = np.nanmax(rt[fieldPixels])
+            if lappeakfr>=fieldpeak*0.5 and lappeakfr<=fieldpeak*1.5:
+                countlaps+=1
+        if countlaps>=rmaptrial.shape[0]//3 or countlaps>=15:
+            ind = np.where(rmap[fieldPixels]==fieldpeak)
+            fieldpeakind = fieldPixels[0][ind[0]][0] 
+            placeFieldsPeakFr.append(fieldpeak)
+            placeFieldsCenter.append(fieldpeakind)
+            placeFieldsSize.append(round(len(fieldPixels[0])*pixel2cm,2)) #converting to cm
+            fieldnum = fieldnum + 1
+            newplacemap[fieldPixels] = fieldnum
+    numFields = len(placeFieldsCenter)
+    placeFieldsPeakFr = np.array(placeFieldsPeakFr)
+    placeFieldsCenter = np.array(placeFieldsCenter)
+    placeFieldsSize = np.array(placeFieldsSize)
+    if numFields:
+        pfDispersion = getFieldDispersion(rmaptrial, newplacemap, placeFieldsCenter, numFields, cmconversion=pixel2cm, L=L)
+    else:
+        pfDispersion = np.nan
+    return newplacemap, placeFieldsPeakFr, placeFieldsCenter, placeFieldsSize, numFields, pfDispersion
+
+# calculate place field dispersion
+def getFieldDispersion(rmaptrial, plmap, pfcenter, nfields, cmconversion=4, L=314):
+    M = rmaptrial.shape[0]
+    N = rmaptrial.shape[1]
+    placeFieldDispersion = []
+    for i in range(nfields):
+        C = pfcenter[i]*cmconversion
+        FieldDis = 0
+        dispersionPF = 0
+        fieldIndex = np.where(plmap==i+1)[0]
+        for m in range(M):
+            com = scnd.measurements.center_of_mass(rmaptrial[m,fieldIndex])
+            com = com[0]+fieldIndex[0]
+            C_i = com*cmconversion
+            if not np.isnan(C_i):
+                FieldDis += (C - C_i)**2
+        dispersionPF = (L/N)*np.sqrt((1./M)*FieldDis)
+        placeFieldDispersion.append(dispersionPF)
+    return np.array(placeFieldDispersion)
 
 #function to assign phase to spike timestamps
 def phase_assignment(thetapeaktime,spiketimestamps,lfpsignal,fs):
@@ -327,237 +489,4 @@ def loadSpikePhase(filename, chnum, spikets, sessionStart, sessionEnd, fsl=3000.
 # def getautocorr(st1,st2):
 #     corrbins = np.arange(-1000,1000)
 #     autocorr = np.array(getBinnedISI(st1*1000, len(st1), st2*1000, len(st2)))
-#     return autocorr, corrbins    
-
-# function to get shuffled spatial information
-def calcShuffleSpatialInfo(observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed,  occmapbins, posMin=0, posMax=314, binwidth=4, fs=30.):
-    shuffledsi = []
-    for i in range(1000):
-        print(i)
-        #get a lag from 30seconds to behavior duration - 15seconds
-        lag = np.random.uniform(15, (endTime-startTime-15), 1)[0]
-        #add the lag to generate timestamps
-        newSpikeTimestamps = spikets + lag
-        #remove spike timestamps which do not fall in maze time
-        #find the indices where spiketimestamps exceed end maze time
-        indices = np.where(newSpikeTimestamps>endTime)[0]
-        if indices.size!=0:
-            #get the modulo function to adjust for spike train exceeding end maze time
-            newSpikeTimestamps[indices] = newSpikeTimestamps[indices] - endTime + startTime
-            #do a cyclic shift to move the updated timestamps which earlier exceeded spike timestamps to the front 
-            shuffledSpikeTimestamps = np.concatenate((newSpikeTimestamps[np.min(indices):],newSpikeTimestamps[:np.min(indices)]))
-        else:
-        	shuffledSpikeTimestamps = newSpikeTimestamps
-        shuffledSpikeTimestamps = np.delete(shuffledSpikeTimestamps, np.where(shuffledSpikeTimestamps>endTime))
-        shuffledSpikeTimestamps = np.delete(shuffledSpikeTimestamps, np.where(shuffledSpikeTimestamps<startTime))
-        # function to process spike pos data
-        spikepos, _, _, spikepostrial, _ = processSpikePos(shuffledSpikeTimestamps, trialStart, trialEnd, posX, posT, posSpeed)
-        # generate spike map across trials
-        _, _, _, _, spikemap1dsm = processSpikeMap(spikepostrial, spikepos, occmapbins, posMin=posMin, posMax=posMax, binwidth=binwidth)
-        ratemap1dsm = (spikemap1dsm/occmap1d)*fs
-        si = calcSpatialInformationScore(ratemap1dsm, occmap1d)
-        shuffledsi.append(si)
-    return 1 - np.nansum(observedSI>shuffledsi)/len(shuffledsi), np.array(shuffledsi)
-
-# rotate place map
-def rotatedPlacemap(rmap, rmaptrial):
-    valleyind = detect_peaks(rmap, mph=-2, valley=True)
-    if len(valleyind):
-        if len(valleyind)>=2:
-            valleyind = valleyind[1]
-        else:
-            valleyind = valleyind[0]
-        rmap = np.roll(rmap,-valleyind)
-        rmaptrial = np.roll(rmaptrial, -valleyind, axis=1) 
-    return rmap, rmaptrial, valleyind
-
-# field size determination
-def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=8, pixel2cm=4):
-    rmap = rmap - np.nanmin(rmap)
-    placemap = np.zeros(len(rmap))
-    placemap[np.where(rmap >= thresholdrate)] = 1 #same as mosers' 1hz threshold
-    placemap = measure.label(placemap)
-    placemap = measure.label(placemap, background=0)
-    numfields = np.max(placemap) #find num of fields
-    placeFieldsPeakFr = []
-    placeFieldsCenter = []
-    placeFieldsSize = []    
-    ##lets try to find center of the peaks
-    for i in range(1,numfields+1):
-        fieldPixels = np.where(placemap==i)
-        fieldpeak = max(rmap[fieldPixels])
-        #fall off of firing rate to 15% PFR field
-        fieldthreshold = max(peakfallTh*fieldpeak, thresholdrate/2.)
-        #indixes where firing rate is less than 15%
-        fieldsizecutoffind = np.where(rmap[fieldPixels]<fieldthreshold)
-        #remove fields samller than 15cm and field peak firing rate less than 
-        #1hz and field PFR less than 15% of the max firing rate of the neuron
-        if len(fieldPixels[0])<fieldcutoff/pixel2cm or fieldpeak<fieldpeakFr:
-            placemap[fieldPixels]=0
-        #shorten the field size using the 15% fall off threshold
-        if len(fieldsizecutoffind[0])>0:
-            placemap[fieldPixels[0][fieldsizecutoffind[0]]]=0
-            fieldsizecutoffind1 = np.where(rmap[fieldPixels]>=fieldthreshold)
-            fieldPixels = np.array([fieldPixels[0][fieldsizecutoffind1[0]]]) 
-    #retiteration after shortening things downs
-    placemap = measure.label(placemap)
-    placemap = measure.label(placemap, background=0)
-    numFields = np.max(placemap)
-    #save the field peak firing rate, peak indices, size after all the criteria 
-    #this can be improved further
-    for i in np.arange(1,numFields+1):
-        fieldPixels = np.where(placemap==i)
-        fieldpeak = max(rmap[fieldPixels])
-        # check if the cell fire in more than 1/3 of the total laps
-        # and is greater than 10 laps
-        countlaps=0
-        for rt in rmaptrial:
-            lappeakfr = np.nanmax(rt[fieldPixels])
-            if lappeakfr>=fieldpeak-0.5 or lappeakfr<=fieldpeak+0.5:
-                countlaps+=1
-        if countlaps>=rmaptrial.shape[0]//3 and countlaps>=15:      
-            ind = np.where(rmap[fieldPixels]==fieldpeak)
-            fieldpeakind = fieldPixels[0][ind[0]][0] 
-            placeFieldsPeakFr.append(fieldpeak)
-            placeFieldsCenter.append(fieldpeakind)
-            placeFieldsSize.append(round(len(fieldPixels[0])*pixel2cm,2)) #converting to cm
-    numFields = len(placeFieldsCenter)
-    return placemap, np.array(placeFieldsPeakFr), np.array(placeFieldsCenter), np.array(placeFieldsSize), numFields   
-
-# field size determination v2
-def calcfieldSizev2(rmap, rmaptrial, pixel2cm=4.0):
-    falloffTh = 0.2 # 20% of peak firing of the field
-    contiguousTh = 3 # number of contiguous pixels
-    pkfr = np.nanmax(rmap)
-    minfieldpkfr = 0.75 # 1Hz
-    shiftpixels = 3 # pixels to extend the field by
-    
-    # hack
-    rmap = rmap - np.nanmin(rmap)
-    locs = np.arange(len(rmap))
-    
-    ind = detect_peaks(rmap, mph=minfieldpkfr, mpd=10)
-    ind = ind[np.argsort(rmap[ind])]
-    ind = ind[::-1][:len(ind)]
-    
-    # final output variables
-    fieldscenter = []
-    fieldsedges = []
-    fieldssize = []
-    fieldspeakFr = []
-    # create a zero-based place map
-    placemap = np.zeros(rmap.shape)
-    fieldcount=0
-    
-    if pkfr>=minfieldpkfr and len(ind):
-        # start with max peak first
-        for pi in ind:
-            # get field peak rate and location
-            pkloc = locs[pi]
-            pk = rmap[pi]
-            
-            # check if the peak lies in the previously detected 
-            # place fields only proceed if it does not
-            if pk>=minfieldpkfr and not pkloc in np.where(placemap)[0]:
-                # falloff threshold for the peak
-                if pkfr>=2:
-                    falloffpk = np.nanmax([falloffTh*pk, 0.75])
-                else:
-                    falloffpk = np.nanmin([falloffTh*pk, 0.5])
-                
-                # find left and right edge of the peak
-                # first let's deal with right edge
-                rightedgeind = np.where(rmap[pkloc:]<=falloffpk)[0]
-                # if the peak lies in 80% range of the entire track length 
-                # and there is a falloff value before 360
-                if pkloc<=0.75*rmap.shape[0] and len(rightedgeind):
-                    rightedge = pkloc+rightedgeind[0]
-                else:
-                    # circularly shift the map left by 100 values
-                    rotatedmap = np.roll(rmap, -40)
-                    rightedgeind = np.where(rotatedmap[pkloc-40:]<=falloffpk)[0]
-                    if len(rightedgeind)==0:
-                        rightedgeind = rmap.shape[0]
-                    else:
-                        rightedge = pkloc+rightedgeind[0] # right end in 360+".." values                    
-                
-                # now dealing with left edge
-                leftedgeind = np.where(rmap[:pkloc]<=falloffpk)[0]
-                # if the peak lies in 60:360 range and 
-                # there is a falloff value before 0
-                if pkloc>=0.4*rmap.shape[0] and len(leftedgeind):
-                    leftedge = leftedgeind[-1]
-                else:
-                    # circularly shift the map right by 100 values
-                    rotatedmap = np.roll(rmap, 30);
-                    leftedgeind = np.where(rotatedmap[:pkloc+30]<=falloffpk)[0]
-                    if len(leftedgeind)==0:
-                        leftedge=0
-                    else:
-                        leftedge = leftedgeind[-1]-30; # left end in negative".." values
-
-
-                # width calculation, spikepos and spikephase
-                # extraction for each place field
-                # check if field size is greater than continguous threshold 
-                if (rightedge-leftedge)>=contiguousTh and not (rightedge in np.where(placemap)[0]) and not (leftedge in np.where(placemap)[0]):                            
-                    leftedge=leftedge-shiftpixels
-                    rightedge=rightedge+shiftpixels
-                    
-                    if rightedge>rmap.shape[0]:
-#                        if not (rightedge-rmap.shape[0] in np.where(placemap)[0]):
-                        fieldPixels = np.concatenate((np.arange(leftedge, rmap.shape[0]), np.arange(rightedge-rmap.shape[0])))
-                    elif leftedge<0:
-#                        if not (leftedge+rmap.shape[0] in np.where(placemap)[0]):
-                        fieldPixels = np.concatenate((np.arange(rightedge), np.arange(rmap.shape[0]+leftedge,rmap.shape[0])))
-                    else:
-                        fieldPixels = np.arange(leftedge,rightedge)
-                     
-                    # check if the cell fire in more than 1/3 of the total laps
-                    # and is greater than 10 laps
-                    countlaps=0
-                    for rt in rmaptrial:
-                        lappeakfr = np.nanmax(rt[fieldPixels])
-                        if lappeakfr>=pk-0.5 or lappeakfr<=pk+0.5:
-                            countlaps+=1
-                    if countlaps>=rmaptrial.shape[0]//3 and countlaps>=15:
-                        if not any(x in np.where(placemap)[0] for x in fieldPixels):
-                            placemap[fieldPixels] = fieldcount+1
-                            fieldscenter.append(pkloc)
-                            fieldspeakFr.append(pk)
-                            fieldssize.append((rightedge-leftedge)*pixel2cm)
-                            fieldsedges.append([leftedge,rightedge])
-                            fieldcount = fieldcount+1
-    numFields  = len(fieldscenter)
-    return placemap, np.array(fieldspeakFr), np.array(fieldscenter), np.array(fieldssize), np.array(fieldsedges), numFields   
-
-# calculate place field dispersion
-def getFieldDispersion(rmaptrial, plmap, pfcenter, nfields, cmconversion=4, L=400):
-    M = rmaptrial.shape[0]
-    N = rmaptrial.shape[1]
-    placeFieldDispersion = []
-    for i in range(nfields):
-        C = pfcenter[i]*cmconversion
-        FieldDis = 0
-        dispersionPF = 0
-        for m in range(M):
-            fieldIndex = np.where(plmap==i+1)[0]
-            com = scnd.measurements.center_of_mass(rmaptrial[m,fieldIndex])
-            com = com[0]+fieldIndex[0]
-            C_i = com*cmconversion
-            if not np.isnan(C_i):
-                FieldDis += (C - C_i)**2
-        dispersionPF = (L/N)*np.sqrt((1./M)*FieldDis)
-        placeFieldDispersion.append(dispersionPF)
-    return np.array(placeFieldDispersion)
-
-# get out-field in-field ratio
-def calcOutInFieldRatio(rmap, pmap, rmaptrials):
-    inrate = np.nanmean(rmap[pmap!=0])
-    outrate = np.nanmean(rmap[pmap==0])
-    ratio = []
-    for rt in rmaptrials:
-        inrt = np.nanmean(rt[pmap!=0])
-        outrt = np.nanmean(rt[pmap==0])
-        ratio.append(outrt/inrt)
-    return outrate/inrate, np.array(ratio)
+#     return autocorr, corrbins
