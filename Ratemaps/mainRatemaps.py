@@ -10,15 +10,17 @@ import os
 import rmaputils 
 import numpy as np
 import pandas as pd
-
-# ---------------------------MAIN----------------------------------------------------------------------------
+import pylab as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 # THRESHOLD PARAMS
-speedTh = 2.5 # cm/s
+speedTh = 5 # cm/s
 
 # HALLWAY information
 HALLWAYS = [1,2,28] # hallways numbers, Classroom: 1, Sunset:2, Universal: 28
-rewardLocs = {'1':[0.2,0.65], '2':[0.45,0.83], '28':[0.35,0.83]}
+rewardLocs = {1:[0.2,0.65], 2:[0.45,0.83], 28:[0.35,0.83]}
+colors = {1:'Blues', 2:'Oranges', 28:'Reds'}
+linecolors = {1:'b', 2:'darkorange', 28:'r'}
 
 # POS variables
 fspos = 30.
@@ -26,13 +28,15 @@ dt = 1./fspos
 posMin = 0
 posMax = 314 #cm
 binwidth = 314/100 #cm
-gsmooth = 0.35
+gsmooth = 0.25
 bin2cm = binwidth
-halllength = 314.0
+xt = np.array([0,50,100])
+xtcm = xt*binwidth
 
 # read csv with start and end time for each experimental animal
 ephysdirname = r'X:\SWIL-Exp-Rajat\Spikesorted-SWIL'
 behavdirname = r'X:\SWIL-Exp-Rajat\Behavior-SWIL'
+rmapdirname = r'X:\SWIL-Exp-Rajat\Ratemaps-SWIL'
 epochsfname = 'swil-animals.csv'
 # load each recording epochs file
 epochsdf = pd.read_csv(os.path.join(ephysdirname, epochsfname))
@@ -87,9 +91,10 @@ for dname, st, et in zip(filename, start_time, end_time):
         animaldat[hallwaynum]['omapbins'] = omapbins
     # iterate through spike timestamps
     spikedata = {}
-    for cid, spikets in zip(clusterId, spiketimes):
+    for cid, spikets in zip(clusterId[10:12], spiketimes[10:12]):
         celldata = {} # dict to hold spike data for each neurons in each hallway
         for hallwaynum in HALLWAYS:
+            print(cid, hallwaynum)
             celldata[hallwaynum] = {}
             #spikephase = ratemaputils.loadSpikePhase(lfpfilename, chnum, spikeposts, posT[0], posT[-1], fsl=1500.)
             
@@ -116,8 +121,8 @@ for dname, st, et in zip(filename, start_time, end_time):
                                                        posX, posT, posSpeed,  omapbins, posMin=posMin, posMax=posMax, 
                                                        binwidth=binwidth, fs=fspos)
             # get placefield statistics: num field, field peak firing rate, size, center, dispersion
-            if sinfo_p<0.05:
-                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields, pfDispersion = rmaputils.calcfieldSize(rmap1dsm, rmaptrsm, pixel2cm=bin2cm, L=halllength)
+            if sinfo_p<0.01:
+                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields, pfDispersion = rmaputils.calcfieldSize(rmap1dsm, rmaptrsm, pixel2cm=bin2cm, L=posMax)
             else:
                 pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields, pfDispersion = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
             
@@ -149,123 +154,97 @@ for dname, st, et in zip(filename, start_time, end_time):
             celldata[hallwaynum]['pfDispersion'] = pfDispersion
         # plot the data across hallways for this cell
         spikedata[cid] = celldata
-        """
-        6 x 4: each hallway + mean
-        1. trajectory plot for each hallway 
-        2. occupancy trial for each hallway
-        3. spikemap trial for each hallway
-        4. ratemap trial for each hallway
-        5. 1d occ map, 1d spike map, 1d rate map
-        6. phase vs. pos + cell statistics
-        """
         del celldata
     animaldat['spikedata'] = spikedata
     del spikedata
+    opfname = os.path.join(rmapdirname, dname+'-op.npy')
+    np.save(opfname, animaldat)
+    """
+    1 x 4: + cell statistics
+    5. phase vs. pos + TMI
+    """
+    pdfname = os.path.join(rmapdirname, dname+'-op.pdf')
+    with PdfPages(pdfname) as pdf: 
+        for cid in clusterId[10:12]:
+            fig, ax = plt.subplots(nrows=6, ncols=4, figsize=(18,10))
+            for h,hnum in enumerate(HALLWAYS):
+                # trajectory plot
+                ax[0][h].plot(animaldat[hnum]['posX'], animaldat[hnum]['posT'], color='k', linewidth=1, rasterized=True)
+                ax[0][h].scatter(animaldat['spikedata'][cid][hnum]['spkPos'], animaldat['spikedata'][cid][hnum]['spkPosts'], color=linecolors[hnum], s=10, rasterized=True)
+                # occ map
+                ax[1][h].imshow(animaldat[hnum]['omaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
+                ax[1][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
+                ax[1][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
+                # spike map
+                ax[2][h].imshow(animaldat['spikedata'][cid][hnum]['spkmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
+                ax[2][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
+                ax[3][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
+                # rate map
+                ax[3][h].imshow(animaldat['spikedata'][cid][hnum]['rmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
+                ax[3][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
+                ax[3][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
+                # mean over occ, spike, and ratemap plot
+                ax[1][3].plot(np.nanmean(animaldat[hnum]['omaptrsm'],0), color=linecolors[hnum], rasterized=True)
+                ax[2][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['spkmaptrsm'],0), color=linecolors[hnum])
+                ax[3][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['rmaptrsm'],0), color=linecolors[hnum])
+                # theta phase precession plot
+                ax[4][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
+                ax[4][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
+                # label settings
+                if hnum==1:
+                    ax[0][h].set_ylabel('Time (s)', fontsize=18)
+                    ax[1][h].set_ylabel('Trial #', fontsize=18)
+                    ax[2][h].set_ylabel('Trial #', fontsize=18)
+                    ax[3][h].set_ylabel('Trial #', fontsize=18)
+                    ax[4][h].set_ylabel('Phase (deg)', fontsize=18)
+                # axis limit and tick labels settings
+                ax[1][h].set_xticks(xt), ax[1][h].set_xticklabels(xtcm)
+                ax[1][3].set_xticks(xt), ax[1][3].set_xticklabels(xtcm)
+                ax[2][h].set_xticks(xt), ax[2][h].set_xticklabels(xtcm)
+                ax[2][3].set_xticks(xt), ax[2][3].set_xticklabels(xtcm)
+                ax[3][h].set_xticks(xt), ax[3][h].set_xticklabels(xtcm)
+                ax[3][3].set_xticks(xt), ax[3][3].set_xticklabels(xtcm)
+                ax[4][h].set_xticks(xt), ax[4][h].set_xticklabels(xtcm)
+                ax[0][h].set_xlim([0,314])
+                ax[1][h].set_xlim([0,100])
+                ax[2][h].set_xlim([0,100])
+                ax[3][h].set_xlim([0,100])
+                ax[0][h].invert_yaxis()
+            ax[1][3].set_xlim([0,100])
+            ax[2][3].set_xlim([0,100])
+            ax[3][3].set_xlim([0,100])
+            # firing statistics for each cell and hallway
+            sth1 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][1]['sinfo'],1))
+            sth2 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][2]['sinfo'],1))
+            sth28 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][28]['sinfo'],1))
+            ax[0][3].text(0.01,0.9,'Hall#1: ' + sth1)
+            ax[0][3].text(0.01,0.6,'Hall#2: ' + sth2)
+            ax[0][3].text(0.01,0.3,'Hall#3: ' + sth28)
+            ax[0][3].set_axis_off()
+            plt.suptitle('Cluster: ' + str(cid), fontsize=20)
+            plt.tight_layout()
+            pdf.savefig(fig, dpi=100)
+            plt.close()
     dada
-#            processed_data['spikephase'] = spikephase
-#            matfilename = os.path.join(outputdir, 'ClustId' + str(good_cluster_id[s]) +'_hall' + str(hallnum) + '_processed.mat')
-#            spio.savemat(matfilename, processed_data)
-#            
-#            # # plotting the entire dataset ***************************************************************************************
-#            fig_name = os.path.join(outputdir, 'ClustId' + str(good_cluster_id[s]) +'_hall' + str(hallnum) + '_ratemap.png')
-#            fig = plt.figure(figsize=(8,8))
-#            ax1 = plt.subplot2grid((10, 2), (0, 0), rowspan=2)
-#            ax2 = plt.subplot2grid((10, 2), (2, 0), rowspan=2)
-#            ax3 = plt.subplot2grid((10, 2), (4, 0), rowspan=2)
-#            ax4 = plt.subplot2grid((10, 2), (6, 0), rowspan=2)
-#            ax5 = plt.subplot2grid((10, 2), (8, 0), rowspan=2)
-#            ax6 = plt.subplot2grid((10, 2), (0, 1), rowspan=2)
-#            ax7 = plt.subplot2grid((10, 2), (2, 1), rowspan=2)
-#            ax8 = plt.subplot2grid((10, 2), (4, 1), rowspan=2)
-#            ax9 = plt.subplot2grid((10, 2), (7, 1), rowspan=4)
-#            
-#            # trajectory plot
-#            ax1.scatter(posX,posT, s=1)
-#            ax1.scatter(spikepos, spikeposts, s=0.5, c='r')
-#            ax1.set_ylim([np.nanmin(posT),np.nanmax(posT)])
-#            ax1.set_ylabel('Time (second)')
-#            ax1.set_xlim([posMin,posMax])
-#            ax1.set_xticks([])
-#            
-#            # occupancy map across trial
-#            ax2.imshow(occmaptrial*dt, aspect='auto', origin='lower')
-#            ax2.set_xticks(np.linspace(0,occmaptrial.shape[1],8)) 
-#            ax2.set_xticklabels(np.linspace(posMin*bin2cm,posMax*bin2cm,8,dtype='int'))
-#            ax2.set_xticks([])
-#            ax2.set_ylabel('Trial Number')
-#            ax2.set_title('Occupancy map trial')
-#            ax2.axvline(x=rewardLocs[hallnum][0]*posMax//binwidth, ymin=0, ymax=len(good_cluster_id), c='w', linestyle='--')
-#            ax2.axvline(x=rewardLocs[hallnum][1]*posMax//binwidth, ymin=0, ymax=len(good_cluster_id), c='w', linestyle='--')
-#            
-#            # occupancy map 1d smooth
-#            ax3.plot(occmap1dsm*dt)
-#            ax3.set_xticks(np.linspace(0,occmaptrial.shape[1],6)) 
-#            ax3.set_xticklabels(np.linspace(posMin*bin2cm,occmaptrial.shape[1]*bin2cm,6,dtype='int'))
-#            ax3.set_xticks([])
-#            ax3.set_yticks([])
-#            ax3.set_title('Occupancy map')
-#            
-#            # spike map across trials
-#            ax4.imshow(spikemaptrial, aspect='auto', origin='lower')   
-#            ax4.set_xticks(np.linspace(0,occmaptrial.shape[1],6)) 
-#            ax4.set_xticklabels(np.linspace(posMin*bin2cm,occmaptrial.shape[1]*bin2cm,6,dtype='int'))
-#            ax4.set_xticks([])
-#            ax4.set_ylabel('Trial Number')
-#            ax4.set_title('Spike map trial')
-#            ax4.axvline(x=rewardLocs[hallnum][0]*posMax//binwidth, ymin=0, ymax=len(good_cluster_id), c='w', linestyle='--')
-#            ax4.axvline(x=rewardLocs[hallnum][1]*posMax//binwidth, ymin=0, ymax=len(good_cluster_id), c='w', linestyle='--')
-#                
-#            # plot spikemap1d smooth
-#            ax5.plot(spikemap1dsm)  
-#            ax5.set_xticks(np.linspace(0,occmaptrial.shape[1],6)) 
-#            ax5.set_xticklabels(np.linspace(posMin*bin2cm,occmaptrial.shape[1]*bin2cm,6,dtype='int'), fontsize=10)
-#            ax5.set_yticks([])
-#            ax5.set_title('Spike map')
-#            
-#            # plot rate map across trials
-#            ax6.imshow(ratemaptrial, aspect='auto', origin='lower')
-#            ax6.set_xticks([])
-#            ax6.set_ylabel('Trial Number')
-#            ax6.set_title('Rate map trial')
-#            ax6.axvline(x=rewardLocs[hallnum][0]*posMax//binwidth, ymin=0, ymax=len(good_cluster_id), c='w', linestyle='--')
-#            ax6.axvline(x=rewardLocs[hallnum][1]*posMax//binwidth, ymin=0, ymax=len(good_cluster_id), c='w', linestyle='--')
-#            
-#            # plot rate map smoothed 1d
-#            ax7.plot(ratemap1dsm)  
-#            ax7.set_xticks(np.linspace(0,occmaptrial.shape[1],6)) 
-#            ax7.set_xticklabels(np.linspace(posMin*bin2cm,occmaptrial.shape[1]*bin2cm,6,dtype='int'), fontsize=12)
-#            ax7.set_yticks([])
-#            ax7.set_xticks([])
-#            maxfr = np.round(np.nanmax(ratemap1dsm),2)
-#            meanfr = np.round(np.nanmean(ratemap1dsm),2)
-#            ax7.set_title('Rate map   p:' + str(maxfr) + ' m: ' + str(meanfr))
-#            
-#            # plot phase precession
-#            spikepos = np.array(spikepos)
-#            ax8.scatter(spikepos, spikephase, 0.2, c='k')
-#            ax8.scatter(spikepos, np.array(spikephase)+360, s=0.2, c='k')
-#            ax7.set_xticks([])
-#            ax8.set_ylabel('Phase (deg)')
-#            ax8.set_xlabel('Position')
-#            ax8.set_xlim([posMin,posMax])
-#            
-#            # firing statistics
-#            ax9.text(0.1,0.65,'Mean FR =  {:.2f}'.format(meanfr), fontsize=10)
-#            ax9.text(0.1,0.55,'Max FR =  {:.2f}'.format(maxfr), fontsize=10)
-#            ax9.text(0.1,0.45,'# Spikes =  {:}'.format(str(len(spikeposts))), fontsize=10)
-#            ax9.text(0.1,0.35,'Spatial Info =  {:.2f}'.format(spatialInfo), fontsize=10)
-#            ax9.text(0.1,0.25,'Stability Index =  {:.2f}'.format(stabilityInd), fontsize=10)
-#            ax9.text(0.1,0.15,'Out-In ratio =  {:.2f}'.format(outinratio), fontsize=10)
-#            ax9.text(0.1,0.05,'Fields Size =  ' + str(placeFieldsSize), fontsize=10)
-#            ax9.set_axis_off()
-#
-#            plt.suptitle('ClustId: ' + str(good_cluster_id[s]) + ' Hall: ' + str(hallnum), fontsize=20)
-#            plt.tight_layout()
-#            plt.savefig(fig_name, dpi=200)
-#            plt.close()
-#
-#            
-#            #************ end of plotting ***********************************************************************
+#    processed_data['spikephase'] = spikephase
+#    matfilename = os.path.join(outputdir, 'ClustId' + str(good_cluster_id[s]) +'_hall' + str(hallnum) + '_processed.mat')
+#    spio.savemat(matfilename, processed_data)
+#    
+#    # # plotting the entire dataset ***************************************************************************************
+#    fig_name = os.path.join(outputdir, 'ClustId' + str(good_cluster_id[s]) +'_hall' + str(hallnum) + '_ratemap.png')
+#    fig = plt.figure(figsize=(8,8))
+#    ax1 = plt.subplot2grid((10, 2), (0, 0), rowspan=2)
+#    
+#    # plot phase precession
+#    spikepos = np.array(spikepos)
+#    ax8.scatter(spikepos, spikephase, 0.2, c='k')
+#    ax8.scatter(spikepos, np.array(spikephase)+360, s=0.2, c='k')
+#    ax7.set_xticks([])
+#    ax8.set_ylabel('Phase (deg)')
+#    ax8.set_xlabel('Position')
+#    ax8.set_xlim([posMin,posMax])
+#    plt.savefig(fig_name, dpi=200)
+#    plt.close()
 #            
 #    # rate maps for all cells 
 #    ratemap_allcell = np.array(ratemap_allcell)
@@ -293,6 +272,3 @@ for dname, st, et in zip(filename, start_time, end_time):
 #    plt.ylabel('Cell #', fontsize=22)
 #    plt.colorbar()
 #    plt.show()
-#    
-#    np.save(os.path.join(outputdir, 'hall'+str(hallnum)+'_ratemap_norm.npy'), ratemap_allcell_norm)
-#    np.save(os.path.join(outputdir, 'hall'+str(hallnum)+'_ratemap.npy'), ratemap_allcell)

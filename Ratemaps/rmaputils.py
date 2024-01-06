@@ -83,7 +83,7 @@ def loadOccupancy(hallway_trial_data, posMin=0, posMax=314, binwidth=4, speedThr
     posSpd = []
     trialSt = []
     trialEt = []
-    # occupancy mnap for each trials
+    # occupancy map for each trials
     omaptrial = []
     # iterate thorugh each trial and interpolate the time 
     # values to ensure uniform sampling rate (fs=30 Hz)
@@ -254,8 +254,6 @@ def calcShuffledSI(idx, observedSI, spikets, occmap1d, endTime, startTime, trial
     si = calcSpatialInformationScore(ratemap1dsm, occmap1d)
     return si
 
-
-
 # calclate shuffled spatial info by shuffling for individual trials
 def calcShuffledSIByTrial(idx, observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
     spkmaptrials = []
@@ -287,7 +285,7 @@ def calcShuffledSIByTrial(idx, observedSI, spikets, occmap1d, endTime, startTime
 
 # function to get shuffled spatial information
 def calcShuffleSpatialInfo(observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed,  occmapbins, posMin=0, posMax=314, binwidth=4, fs=30.):
-    idx = np.arange(500)
+    idx = np.arange(100)
     from multiprocessing.dummy import Pool as ThreadPool
     pool = ThreadPool(10)
     shuffledsi = pool.starmap(calcShuffledSIByTrial, zip(idx, repeat(observedSI), repeat(spikets), repeat(occmap1d), 
