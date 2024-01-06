@@ -166,63 +166,7 @@ for dname, st, et in zip(filename, start_time, end_time):
     pdfname = os.path.join(rmapdirname, dname+'-op.pdf')
     with PdfPages(pdfname) as pdf: 
         for cid in clusterId[10:12]:
-            fig, ax = plt.subplots(nrows=6, ncols=4, figsize=(18,10))
-            for h,hnum in enumerate(HALLWAYS):
-                # trajectory plot
-                ax[0][h].plot(animaldat[hnum]['posX'], animaldat[hnum]['posT'], color='k', linewidth=1, rasterized=True)
-                ax[0][h].scatter(animaldat['spikedata'][cid][hnum]['spkPos'], animaldat['spikedata'][cid][hnum]['spkPosts'], color=linecolors[hnum], s=10, rasterized=True)
-                # occ map
-                ax[1][h].imshow(animaldat[hnum]['omaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
-                ax[1][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
-                ax[1][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
-                # spike map
-                ax[2][h].imshow(animaldat['spikedata'][cid][hnum]['spkmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
-                ax[2][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
-                ax[3][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
-                # rate map
-                ax[3][h].imshow(animaldat['spikedata'][cid][hnum]['rmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
-                ax[3][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
-                ax[3][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
-                # mean over occ, spike, and ratemap plot
-                ax[1][3].plot(np.nanmean(animaldat[hnum]['omaptrsm'],0), color=linecolors[hnum], rasterized=True)
-                ax[2][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['spkmaptrsm'],0), color=linecolors[hnum])
-                ax[3][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['rmaptrsm'],0), color=linecolors[hnum])
-                # theta phase precession plot
-                ax[4][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
-                ax[4][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
-                # label settings
-                if hnum==1:
-                    ax[0][h].set_ylabel('Time (s)', fontsize=18)
-                    ax[1][h].set_ylabel('Trial #', fontsize=18)
-                    ax[2][h].set_ylabel('Trial #', fontsize=18)
-                    ax[3][h].set_ylabel('Trial #', fontsize=18)
-                    ax[4][h].set_ylabel('Phase (deg)', fontsize=18)
-                # axis limit and tick labels settings
-                ax[1][h].set_xticks(xt), ax[1][h].set_xticklabels(xtcm)
-                ax[1][3].set_xticks(xt), ax[1][3].set_xticklabels(xtcm)
-                ax[2][h].set_xticks(xt), ax[2][h].set_xticklabels(xtcm)
-                ax[2][3].set_xticks(xt), ax[2][3].set_xticklabels(xtcm)
-                ax[3][h].set_xticks(xt), ax[3][h].set_xticklabels(xtcm)
-                ax[3][3].set_xticks(xt), ax[3][3].set_xticklabels(xtcm)
-                ax[4][h].set_xticks(xt), ax[4][h].set_xticklabels(xtcm)
-                ax[0][h].set_xlim([0,314])
-                ax[1][h].set_xlim([0,100])
-                ax[2][h].set_xlim([0,100])
-                ax[3][h].set_xlim([0,100])
-                ax[0][h].invert_yaxis()
-            ax[1][3].set_xlim([0,100])
-            ax[2][3].set_xlim([0,100])
-            ax[3][3].set_xlim([0,100])
-            # firing statistics for each cell and hallway
-            sth1 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][1]['sinfo'],1))
-            sth2 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][2]['sinfo'],1))
-            sth28 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][28]['sinfo'],1))
-            ax[0][3].text(0.01,0.9,'Hall#1: ' + sth1)
-            ax[0][3].text(0.01,0.6,'Hall#2: ' + sth2)
-            ax[0][3].text(0.01,0.3,'Hall#3: ' + sth28)
-            ax[0][3].set_axis_off()
-            plt.suptitle('Cluster: ' + str(cid), fontsize=20)
-            plt.tight_layout()
+            fig = rmaputils.genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm, colors, linecolors, posMin=posMin, posMax=posMax, binwidth=binwidth)
             pdf.savefig(fig, dpi=100)
             plt.close()
     dada
