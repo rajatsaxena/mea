@@ -78,6 +78,7 @@ for aname,adname,itidx in zip(animalsname,animalsdirname, indices):
             # create hallway specific dataframe
             allhallwaydata[hnum] = calcHallwayData(dat, hnum, binwidth=BINWIDTH)
             normspeed = norm1D(np.nanmean(allhallwaydata[hnum]['binned_speed'],0)[1:])
+            print(allhallwaydata[hnum]['binned_speed'].shape[0])
             meanSpeed.append(normspeed)
     meanSpeedAllAnimals.append(meanSpeed)
     # plot all hallways data

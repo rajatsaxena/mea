@@ -171,7 +171,7 @@ def trialTransition(df):
     trial_endidx = np.where(np.diff(df['pos'])<-0.95)[0]+1
     trial_startidx = np.where(np.diff(df['pos'])<-0.95)[0]+1
     trial_startidx = np.insert(trial_startidx,0,0)
-    trial_endidx = np.append(trial_endidx, len(df))
+    trial_endidx = np.append(trial_endidx, len(df)-1)
     return trial_startidx, trial_endidx
 
 
@@ -201,6 +201,10 @@ def calcHallwayData(df, hnum, binwidth=1):
     # find trial start and end indices
     trial_start_idx, trial_end_idx = trialTransition(df_hnum)
     trial_transition = np.vstack((trial_start_idx, trial_end_idx)).T
+    diffidx = trial_transition[:,1] - trial_transition[:,0]
+    trial_transition = np.delete(trial_transition, np.where(diffidx<5)[0], axis=0)
+    trial_start_idx, trial_end_idx = trial_transition[:,0], trial_transition[:,1]
+    trial_transition = np.array(df_hnum['time'])[trial_transition]
     # calculate trial specific data
     trial_data = calcTrialData(df_hnum, trial_start_idx, trial_end_idx)
     # get binned speed, binned time count, binned time sum plot
