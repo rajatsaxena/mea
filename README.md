@@ -21,9 +21,10 @@ Note that many of these scripts are modified from different sources such as Alle
 
 * **LFP**: scripts for SWIL lfp data analysis
   * decimateLFP_fs24.py.py: script to decimate LFPs by 24x for all recorded channels
-
-* **Ratemaps** : scripts for generating rate for SWIL project
   * mea.py: script with utils functions
   * detect_peaks.npy: script to detect peaks (similar to matlab)
+  
+
+* **Ratemaps** : scripts for generating rate for SWIL project
   * rmaputils.py: utils for generating ratemaps
   * mainRatemaps.py: file to generate and store ratemaps and save processed data
