@@ -1,12 +1,14 @@
+% basepath
+basepath = 'X:\SWIL-Exp-Rajat\Spikesorted-SWIL';
+% files
 fnames = {'SWIL105PPC', 'SWIL11PPC', 'SWIL12PPC', 'SWIL13PPC', 'SWIL15PPC',  ...
     'SWIL18PPC', 'SWIL19PPC', 'SWIL20PPC', 'SWIL22PPC', 'SWIL23PPC', ...
     'SWIL24PPC', 'SWIL25PPC', 'SWIL26PPC', 'SWIL105VC', 'SWIL11VC', ... 
     'SWIL12VC', 'SWIL13VC', 'SWIL15VC', 'SWIL18VC', 'SWIL19VC', ... 
     'SWIL20VC', 'SWIL22VC', 'SWIL23VC', 'SWIL24VC', 'SWIL25VC', 'SWIL26VC'};
-
+ 
+% iterate through files
 for i=1:length(fnames)
-    % basepath
-    basepath = 'X:\SWIL-Exp-Rajat\Spikesorted-SWIL';
     fname = fnames{i};
     analysisdirpath = fullfile(basepath,fname);
     cd(analysisdirpath);
