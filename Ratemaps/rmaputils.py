@@ -13,7 +13,7 @@ from itertools import repeat
 import scipy.ndimage as scnd
 import matplotlib.pyplot as plt
 import skimage.measure as measure
-
+import multiprocessing as mp
 sys.path.append('../LFP')
 import mea
 from detect_peaks import detect_peaks
@@ -133,7 +133,7 @@ def processOccupancy(omaptrial, posx,  posMin=0, posMax=400, binwidth=4, smwindo
     return omaptrialsm, omaptrialnorm, omap1d, omap1dsm, omapbins
 
 # function to process spike pos data
-def processSpikePos(spikets, trialStart, trialEnd, posX, posT, posSpd):
+def processSpikePos(spikets, spikephasehc, spikephaseself, trialStart, trialEnd, posX, posT, posSpd, lfpts):
     # variables to hold all the lap wise position and spike data
     # as well as overall spike pos, ts
     spkpos = []
@@ -141,6 +141,8 @@ def processSpikePos(spikets, trialStart, trialEnd, posX, posT, posSpd):
     spkposspeed = []
     trspkpos = []
     trspkposts = []
+    spkphasehc = []
+    spkphaseself = []
     # find spike time and pos for each trial
     for tss, tse in zip(trialStart, trialEnd):
         # variables to hold trial by trial spike pos, spike ts
@@ -149,7 +151,9 @@ def processSpikePos(spikets, trialStart, trialEnd, posX, posT, posSpd):
         # ensure that the spiketimestamps are after the start and end of trials
         ind = np.where((spikets>=posT[0]) & (spikets<=posT[-1]) & (spikets>=tss) & (spikets<=tse))[0]
         spkts = spikets[ind]
-        for ts in spkts:
+        spkphshc = spikephasehc[ind]
+        spkphsself = spikephaseself[ind]
+        for ts, phshc, phsself in zip(spkts, spkphshc, spkphsself):
             if ts>=posT[0] and ts<=posT[-1]:
                 ind, val = binarySearch(posT, ts)
                 # add the timestamps to overall spike data per cell
@@ -159,16 +163,20 @@ def processSpikePos(spikets, trialStart, trialEnd, posX, posT, posSpd):
                 spkposspeed.append(posSpd[ind])
                 tspkpos.append(posX[ind])
                 tspkposts.append(val)
+                spkphasehc.append(phshc)
+                spkphaseself.append(phsself)
         # add the individual trial data to overall trial by trial data
         trspkpos.append(tspkpos)
         trspkposts.append(tspkposts)
     spkpos = np.array(spkpos)
     spkposts = np.array(spkposts)
     spkposspeed = np.array(spkposspeed)
+    spkphasehc = np.array(spkphasehc)
+    spkphaseself = np.array(spkphaseself)
     trspkpos = np.array(trspkpos)
     trspkposts = np.array(trspkposts)
     # return spike data
-    return spkpos, spkposts, spkposspeed, trspkpos, trspkposts
+    return spkpos, spkposts, spkposspeed, spkphasehc, spkphaseself, trspkpos, trspkposts
 
 # fucntion process spikemap data
 def processSpikeMap(spkpostrial, spkpos, omapbins, posMin=0, posMax=314, binwidth=4, smwindow=1.0):
@@ -410,9 +418,109 @@ def getFieldDispersion(rmaptrial, plmap, pfcenter, nfields, cmconversion=4, L=31
         placeFieldDispersion.append(dispersionPF)
     return np.array(placeFieldDispersion)
 
+# fuction to get corrected channel map to account for missing channels
+def loadCorrectedChanMap(ephysdname, dname, clusterId, df, channelpos, MAX_CHAN=256):
+    cmap = np.load(os.path.join(ephysdname, dname, 'channel_map.npy'))[0]
+    cpos = np.load(os.path.join(ephysdname, dname, 'channel_positions.npy'))
+    if len(cmap)!=MAX_CHAN:
+        cmapIdx = []
+        for cid in clusterId:
+            # find chanel position for the current cluster
+            chnum = int(df[df.cluster_id==cid]['ch'])
+            cposc = cpos[np.where(cmap==chnum)[0],:]
+            # find index for channel num with default channel map
+            idx = np.argwhere(np.all(channelpos==cposc, axis=1))[0]
+            cmapIdx.append(idx[0])
+        cmapIdx = np.array(cmapIdx)
+    else:
+        cmapIdx = cmap
+    return cmapIdx, cmap
+
+# function to calculate highest power theta channel
+def calcHighThetaChan(lfp, chanmap, Fs=3000.0):
+    pool = mp.Pool(16)
+    thetaRatio = pool.map(getBestThetaChannel, [row for row in lfp])
+    thetaRatio = np.array(thetaRatio)
+    ch = np.argmax(thetaRatio)
+    dorsalHCtheta = -mea.get_bandpass_filter_signal(lfp[ch], Fs, [6,10])
+    pool.close()
+    return dorsalHCtheta, chanmap[ch]
+
+# find best theta channel for a given recording
+def getBestThetaChannel(lfp_data, fs=3000.0, f_band=(6,10)):
+    P, F, _ = mea.get_spectrogram(lfp_data,fs)
+    return np.nanmean(mea.get_relative_power(P, F), f_band=f_band)
+
+# find phase for each spike
+def calcSpikePhase(thetapeaktime,spiketimestamps):
+    #variable to hold spike phase
+    spikephase = [] 
+    #iterate over each spike
+    for i in range(0,len(spiketimestamps)):
+        #assign phase=nan if it does not cross the threshold
+        #the second and condition is to account for that the spike occured after the 0th theta peak timestamps or before the last peak timestamps
+        if spiketimestamps[i]>=thetapeaktime[0] and spiketimestamps[i]<=thetapeaktime[-1]:
+            #find before and after thetapeak timestamps nearest to the ith spike
+            _, thetaPeakBefore = find_le(thetapeaktime,spiketimestamps[i])
+            _, thetaPeakAfter = find_ge(thetapeaktime,spiketimestamps[i])
+            #calculate the interpeak diff
+            interpeak_diff = thetaPeakAfter - thetaPeakBefore
+            #if theta peak after and theta peak before are same assign spike phase=0
+            if thetaPeakAfter==thetaPeakBefore:
+                spikephase.append(0.0)
+            #this is to account for the fact that the theta peak interval is within 1/6hz to 1/12 i.e. 0.16 to 0.08
+            #added a epsilon for now 0.2 to 0.05
+            #everyone has to play with this as per their data
+            elif 0.08 < interpeak_diff < 0.2:
+                #calculate by linear interpolation
+                # phase = ((spiketime - thetapeakbefore)/inter_peak_interval)*360
+                phase = round((float(spiketimestamps[i]-thetaPeakBefore)/interpeak_diff)*360,3)
+                spikephase.append(phase) 
+            #if the inter peak difference is outside assign nan
+            else:
+                spikephase.append(np.nan)
+        #phase=nan did not cross threshold
+        else:
+            spikephase.append(np.nan)
+    return np.array(spikephase)
+
+# function to spike phase data 
+def calcThetaPeaks(filename, chnum, sessionStart, sessionEnd, f_range=(6,10), fsl=3000.0, ampth=0.7):
+    # load lFP data
+    dtl=1./fsl
+    lfpsig = np.load(filename, mmap_mode='r')
+    eeg_sig = lfpsig[chnum,:]
+    del lfpsig
+    eeg_times = np.array(np.arange(0, len(eeg_sig)*dtl, dtl), dtype='float32')
+    behav_end_idx = np.where(eeg_times<=sessionEnd)[0][-1]
+    behav_start_idx = np.where(eeg_times>=sessionStart)[0][0]
+    eeg_sig = eeg_sig[behav_start_idx:behav_end_idx]
+    eeg_times = eeg_times[behav_start_idx:behav_end_idx]
+    
+    # filter in theta range 6-10hz
+    theta_eeg_sig = mea.get_bandpass_filter_signal(eeg_sig,fsl,f_range)
+    #amplitude threshold for peak detection. taken directly from Sachin's code
+    ampthresh = np.mean(theta_eeg_sig) + ampth*np.std(theta_eeg_sig)
+    #detect peak indices. min peak height = ampthresh, min peak distance = fs/10
+    theta_peakindices = detect_peaks(theta_eeg_sig, mph=ampthresh, mpd=int(fsl/10.), show=False)
+    #calculate the amplitude and time for theta peak
+    thetapeaktime = eeg_times[theta_peakindices]
+    return thetapeaktime, eeg_times
+
+# calculate TMI
+def calcTMI(phase, bins=np.arange(0,4*360+15,15)):
+    phase = np.array(phase)
+    phase = np.concatenate((phase,phase+360,phase+2*360,phase+3*360,phase+4*360))
+    count, edges = np.histogram(phase, bins)
+    count = scnd.gaussian_filter1d(count,2)
+    count = np.divide(count, np.nanmax(count))
+    count2 = count[np.where((edges>=360) & (edges<=720))[0]]
+    tmi = 1 - np.nanmin(count2)
+    return tmi, count, edges
+
 # function to generate analysis report
 def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, linecolors, posMin=0, posMax=314, binwidth=3.14):
-    fig, ax = plt.subplots(nrows=6, ncols=4, figsize=(18,10))
+    fig, ax = plt.subplots(nrows=6, ncols=4, figsize=(20,10))
     for h,hnum in enumerate(HALLWAYS):
         # trajectory plot
         ax[0][h].plot(animaldat[hnum]['posX'], animaldat[hnum]['posT'], color='k', linewidth=1, rasterized=True)
@@ -433,9 +541,25 @@ def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, l
         ax[1][3].plot(np.nanmean(animaldat[hnum]['omaptrsm'],0), color=linecolors[hnum], rasterized=True)
         ax[2][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['spkmaptrsm'],0), color=linecolors[hnum])
         ax[3][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['rmaptrsm'],0), color=linecolors[hnum])
-        # theta phase precession plot
-        ax[4][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
-        ax[4][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
+        # theta phase precession plot for HC phase
+        phase = animaldat['spikedata'][cid][hnum]['spkPhaseHC']
+        pos = animaldat['spikedata'][cid][hnum]['spkPos']
+        pos = np.concatenate((pos,pos))
+        phase = np.concatenate((phase, phase+360))
+        ax[4][h].scatter(pos, phase, color=linecolors[hnum], s=1, rasterized=True)
+        ax[4][h].axvline(x=rewardLocs[hnum][0]*posMax, c='k', linestyle='--')
+        ax[4][h].axvline(x=rewardLocs[hnum][1]*posMax, c='k', linestyle='--')
+        # theta phase precession plot for self
+        phase = animaldat['spikedata'][cid][hnum]['spkPhaseSelf']
+        pos = animaldat['spikedata'][cid][hnum]['spkPos']
+        pos = np.concatenate((pos,pos))
+        phase = np.concatenate((phase, phase+360))
+        ax[5][h].scatter(pos, phase, color=linecolors[hnum], s=1, rasterized=True)
+        ax[5][h].axvline(x=rewardLocs[hnum][0]*posMax, c='k', linestyle='--')
+        ax[5][h].axvline(x=rewardLocs[hnum][1]*posMax, c='k', linestyle='--')
+        # overall tmi
+        ax[4][3].plot(animaldat['spikedata'][cid][hnum]['phasebins'][:-1], animaldat['spikedata'][cid][hnum]['tmicounthc'], color=linecolors[hnum], rasterized=True)
+        ax[5][3].plot(animaldat['spikedata'][cid][hnum]['phasebins'][:-1], animaldat['spikedata'][cid][hnum]['tmicountself'], color=linecolors[hnum], rasterized=True)
         # label settings
         if hnum==1:
             ax[0][h].set_ylabel('Time (s)', fontsize=18)
@@ -443,6 +567,7 @@ def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, l
             ax[2][h].set_ylabel('Trial #', fontsize=18)
             ax[3][h].set_ylabel('Trial #', fontsize=18)
             ax[4][h].set_ylabel('Phase (deg)', fontsize=18)
+            ax[5][h].set_ylabel('Phase (deg)', fontsize=18)
         # axis limit and tick labels settings
         ax[1][h].set_xticks(xt), ax[1][h].set_xticklabels(xtcm)
         ax[1][3].set_xticks(xt), ax[1][3].set_xticklabels(xtcm)
@@ -450,7 +575,8 @@ def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, l
         ax[2][3].set_xticks(xt), ax[2][3].set_xticklabels(xtcm)
         ax[3][h].set_xticks(xt), ax[3][h].set_xticklabels(xtcm)
         ax[3][3].set_xticks(xt), ax[3][3].set_xticklabels(xtcm)
-        ax[4][h].set_xticks(xt), ax[4][h].set_xticklabels(xtcm)
+        ax[4][h].set_xticks(xtcm)
+        ax[5][h].set_xticks(xtcm)
         ax[0][h].set_xlim([0,314])
         ax[1][h].set_xlim([0,100])
         ax[2][h].set_xlim([0,100])
@@ -470,77 +596,3 @@ def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, l
     plt.suptitle('Cluster: ' + str(cid), fontsize=20)
     plt.tight_layout()
     return fig
-    
-#function to assign phase to spike timestamps
-def phase_assignment(thetapeaktime,spiketimestamps,lfpsignal,fs):
-    #variable to hold spike phase
-    spikephase = [] 
-    #spectrogram to calculate power at different epochs for given lfp signal
-#    frq,T,power = scsig.spectrogram(np.array(lfpsignal),fs=int(fs),window='hanning',nperseg=int(fs),noverlap=int(fs//2),mode='psd') 
-#    # plot_only_specgram(frq, T, power)
-#    #theta range used: 6-10Hz
-#    frq_index_6hz = max(max(np.where(frq<=6)))
-#    frq_index_10hz = min(min(np.where(frq>=10))) 
-#    #calculate theta power (6-10Hz) and suprathetapower (>10Hz)
-#    thetapower = sum(power[frq_index_6hz:frq_index_10hz,:],0)
-#    suprathetapower = sum(power[frq_index_10hz+1:,:],0) 
-#    #calculate theta supra theta power ratio, used as threshold later 
-#    thetasuprathetaPowerRatio = np.divide(thetapower,suprathetapower)
-#    thetasuprathetaPowerRatio = np.nan_to_num(thetasuprathetaPowerRatio)
-#    #threshold settind for theta supra theta power ratio 
-#    #calibrate it according to your own data
-#    thetasuprathetaPowerRatiothreshold = np.nanmean(thetasuprathetaPowerRatio) - 0.8*np.nanstd(thetasuprathetaPowerRatio) 
-    #iterate over each spike
-    for i in range(0,len(spiketimestamps)):
-        #find timestamps in spectrogram closest to ith spike
-#        index, _ = binarySearch(T,spiketimestamps[i])
-        #check if the theta supra theta ratio crosses the threshold (to confirm that there was actually theta modulation)
-        #assign phase=nan if it does not cross the threshold
-        #the second and condition is to account for that the spike occured after the 0th theta peak timestamps or before the last peak timestamps
-        if spiketimestamps[i]>=thetapeaktime[0] and spiketimestamps[i]<=thetapeaktime[-1]: # and thetasuprathetaPowerRatio[index]>=thetasuprathetaPowerRatiothreshold and 
-            #find before and after thetapeak timestamps nearest to the ith spike
-            _, thetaPeakBefore = find_le(thetapeaktime,spiketimestamps[i])
-            _, thetaPeakAfter = find_ge(thetapeaktime,spiketimestamps[i])
-            #calculate the interpeak diff
-            interpeak_diff = thetaPeakAfter - thetaPeakBefore
-            #if theta peak after and theta peak before are same assign spike phase=0
-            if thetaPeakAfter==thetaPeakBefore:
-                spikephase.append(0.0)
-            #this is to account for the fact that the theta peak interval is within 1/6hz to 1/12 i.e. 0.16 to 0.08
-            #added a epsilon for now 0.2 to 0.05
-            #everyone has to play with this as per their data
-            elif 0.05 < interpeak_diff < 0.2:
-                #calculate by linear interpolation
-                # phase = ((spiketime - thetapeakbefore)/inter_peak_interval)*360
-                phase = round((float(spiketimestamps[i]-thetaPeakBefore)/interpeak_diff)*360,3)
-            #if the inter peak difference is outside assign nan
-            else:
-                phase = np.nan
-        #phase=nan did not cross threshold
-        else:
-            phase = np.nan
-        spikephase.append(phase)
-    return spikephase
-
-# function to spike phase data 
-def loadSpikePhase(filename, chnum, spikets, sessionStart, sessionEnd, fsl=3000.):
-    lfpsig = np.load(filename, mmap_mode='r')
-    eeg_sig = lfpsig[chnum,:]
-    del lfpsig
-    dtl=1./fsl
-    eeg_times = np.array(np.arange(0, len(eeg_sig)*dtl, dtl), dtype='float32')
-    behav_end_idx = np.where(eeg_times<=sessionEnd)[0][-1]
-    behav_start_idx = np.where(eeg_times>=sessionStart)[0][0]
-    eeg_sig = eeg_sig[behav_start_idx:behav_end_idx]
-    eeg_times = eeg_times[behav_start_idx:behav_end_idx]
-    
-    # filter in theta range 6-10hz
-    theta_eeg_sig = mea.get_bandpass_filter_signal(eeg_sig,fsl,(6,10))
-    #amplitude threshold for peak detection. taken directly from Sachin's code
-    ampthresh = np.mean(theta_eeg_sig) + 0.7*np.std(theta_eeg_sig)
-    #detect peak indices. min peak height = ampthresh, min peak distance = fs/10
-    theta_peakindices = detect_peaks(theta_eeg_sig, mph=ampthresh, mpd=int(fsl/10.), show=False)
-    #calculate the amplitude and time for theta peak
-    thetapeaktime = eeg_times[theta_peakindices]
-    spike_phase = phase_assignment(thetapeaktime,spikets,eeg_sig,fsl)
-    return spike_phase
