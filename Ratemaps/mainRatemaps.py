@@ -15,7 +15,7 @@ import scipy.io as spio
 from matplotlib.backends.backend_pdf import PdfPages
 
 # THRESHOLD PARAMS
-speedTh = 5 # cm/s
+speedTh = 2 # cm/s
 MAX_CHAN = 256
 
 # HALLWAY information
@@ -114,8 +114,7 @@ for dname, st, et in zip(filename, start_time, end_time):
         
     # iterate through spike timestamps
     spikedata = {}
-    for cid, spikets, chnum, chidx in zip(clusterId[:12], spiketimes[:12], metricsAnimaldf.ch[:12], channelIdx[:12]):
-        print(aname, cid)
+    for cid, spikets, chnum, chidx in zip(clusterId, spiketimes, metricsAnimaldf.ch, channelIdx):
         if 'PPC' in dname:
             chnum = int(chnum + 256) # add to account for PPC channels being at the end
         else:
@@ -202,65 +201,13 @@ for dname, st, et in zip(filename, start_time, end_time):
         del celldata
     animaldat['spikedata'] = spikedata
     del spikedata
+    # save the processed data
     opfname = os.path.join(rmapdirname, dname+'-op.npy')
     np.save(opfname, animaldat)
-    """
-    1 x 4: + cell statistics
-    5. phase vs. pos + TMI
-    """
+    # plot the output pdf
     pdfname = os.path.join(rmapdirname, dname+'-op.pdf')
     with PdfPages(pdfname) as pdf: 
-        for cid in clusterId[10:12]:
+        for cid in clusterId:
             fig = rmaputils.genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm, colors, linecolors, posMin=posMin, posMax=posMax, binwidth=binwidth)
             pdf.savefig(fig, dpi=100)
             plt.close()
-    dada
-    
-    
-
-#    processed_data['spikephase'] = spikephase
-#    matfilename = os.path.join(outputdir, 'ClustId' + str(good_cluster_id[s]) +'_hall' + str(hallnum) + '_processed.mat')
-#    spio.savemat(matfilename, processed_data)
-#    
-#    # # plotting the entire dataset ***************************************************************************************
-#    fig_name = os.path.join(outputdir, 'ClustId' + str(good_cluster_id[s]) +'_hall' + str(hallnum) + '_ratemap.png')
-#    fig = plt.figure(figsize=(8,8))
-#    ax1 = plt.subplot2grid((10, 2), (0, 0), rowspan=2)
-#    
-#    # plot phase precession
-#    spikepos = np.array(spikepos)
-#    ax8.scatter(spikepos, spikephase, 0.2, c='k')
-#    ax8.scatter(spikepos, np.array(spikephase)+360, s=0.2, c='k')
-#    ax7.set_xticks([])
-#    ax8.set_ylabel('Phase (deg)')
-#    ax8.set_xlabel('Position')
-#    ax8.set_xlim([posMin,posMax])
-#    plt.savefig(fig_name, dpi=200)
-#    plt.close()
-#            
-#    # rate maps for all cells 
-#    ratemap_allcell = np.array(ratemap_allcell)
-#    ratemap_allcell_norm = np.array(ratemap_allcell_norm)
-#    
-#    # sort rows according to FR
-#    cell_fr_order = np.argmax(ratemap_allcell_norm[:,:], axis=1)
-#    cell_fr_order = np.argsort(cell_fr_order)
-#    np.save(os.path.join(outputdir, 'cellorder_hall'+str(hallnum)+'.npy'), cell_fr_order)
-#                 
-#    plt.figure()
-#    plt.imshow(ratemap_allcell_norm[cell_fr_order,:], cmap='jet', vmin=0, vmax=1)
-#    if hallnum==1:
-#        plt.axvline(x=(0.2*posMax)//binwidth, ymin=0, ymax=len(good_cluster_id), c='w')
-#        plt.axvline(x=(0.65*posMax)//binwidth, ymin=0, ymax=len(good_cluster_id), c='w')
-#    elif hallnum==2:
-#        plt.axvline(x=(0.45*posMax)//binwidth, ymin=0, ymax=len(good_cluster_id), c='w')
-#        plt.axvline(x=(0.83*posMax)//binwidth, ymin=0, ymax=len(good_cluster_id), c='w')
-#    elif hallnum==28:
-#        plt.axvline(x=(0.35*posMax)//binwidth, ymin=0, ymax=len(good_cluster_id), c='w')
-#        plt.axvline(x=(0.83*posMax)//binwidth, ymin=0, ymax=len(good_cluster_id), c='w')
-#    plt.xticks(np.linspace(posMin//binwidth,posMax//binwidth,8), np.linspace(posMin,posMax,8,dtype='int'))
-#    plt.title("Hall: " + str(hallnum), fontsize=22)
-#    plt.xlabel('Linear Position', fontsize=22)
-#    plt.ylabel('Cell #', fontsize=22)
-#    plt.colorbar()
-#    plt.show()

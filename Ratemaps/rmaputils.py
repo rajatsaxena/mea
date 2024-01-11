@@ -581,6 +581,8 @@ def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, l
         ax[1][h].set_xlim([0,100])
         ax[2][h].set_xlim([0,100])
         ax[3][h].set_xlim([0,100])
+        ax[4][h].set_xlim([0,314])
+        ax[5][h].set_xlim([0,314])
         ax[0][h].invert_yaxis()
     ax[1][3].set_xlim([0,100])
     ax[2][3].set_xlim([0,100])
