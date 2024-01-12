@@ -243,9 +243,10 @@ shift = np.tile(np.linspace(-1,0,32),8)
 
 # this need to be changed for each animal
 subsamplingfactor = 30
-dirname = 'U:\Rajat\Data-Enrichment\EERound2\CT3'
-rawfname = 'CT3_220107_170244'
-aname = 'CT3'
+dirname = 'X:\Rajat\Data-Enrichment\EERound2\ET2'
+rawfname = 'ET2_211228_174841'
+aname = 'ET2'
+opdirname = 'E:\Enrichment\ET2'
 saveLFP = True
 saveAnalog = False
 
@@ -260,15 +261,16 @@ amp_data_mmap = None
 amp_ts_mmap = None
 files = natsorted(glob.glob(os.path.join(dirname,rawfname,'*.rhd')))
 for i, filename in enumerate(files):
+    filename = os.path.basename(filename)
     if i==0:
         print("\n ***** Loading: " + filename)
-        ts, amp_data, dig_in, _, fs = read_data(os.path.join(dirname,filename))
+        ts, amp_data, dig_in, _, fs = read_data(os.path.join(dirname,rawfname,filename))
         amp_data_n  = []
         for c in range(amp_data.shape[0]):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr = np.memmap(filename[:-4]+'_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n.T.shape)
+        arr = np.memmap(os.path.join(opdirname,filename[:-4]+'_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n.T.shape)
         arr[:] = amp_data_n.T
         del arr
         if saveLFP:
@@ -287,13 +289,13 @@ for i, filename in enumerate(files):
             del amp_data_n
     else:
         print("\n ***** Loading: " + filename)
-        ts, amp_data, digIN, _, fs = read_data(os.path.join(dirname,filename))    
+        ts, amp_data, digIN, analogIN, fs = read_data(os.path.join(dirname,rawfname,filename))    
         amp_data_n  = []
         for c in range(amp_data.shape[0]):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr = np.memmap(filename[:-4]+'_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n.T.shape)
+        arr = np.memmap(os.path.join(opdirname,filename[:-4]+'_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n.T.shape)
         arr[:] = amp_data_n.T
         del arr
         if saveLFP:
@@ -311,8 +313,8 @@ for i, filename in enumerate(files):
             amp_data_mmap = np.concatenate((amp_data_mmap, amp_data_n), 1)
             dig_in = np.array(np.concatenate((dig_in, digIN)), dtype='uint8')
             amp_ts_mmap = np.concatenate((amp_ts_mmap, ts))
-#            if saveAnalog:
-#                analog_in = np.concatenate((analog_in, analogIN[0]), dtype=np.float32)
+            if saveAnalog:
+                analog_in = np.concatenate((analog_in, analogIN[0]), dtype=np.float32)
 if saveLFP:
     np.save(lfp_filename, amp_data_mmap)
     np.save(lfpts_filename, amp_ts_mmap)
