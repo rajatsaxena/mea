@@ -243,7 +243,7 @@ shift = np.tile(np.linspace(-1,0,32),8)
 
 # this need to be changed for each animal
 subsamplingfactor = 30
-dirname = 'X:\Rajat\Data-Enrichment\EERound2\ET2'
+dirname = '/media/rajat/mcnlab_store2/Research/SPrecordings/Rajat_Data/Data-Enrichment/EERound2/ET2'
 rawfname = 'ET2_211228_174841'
 aname = 'ET2'
 opdirname = 'E:\Enrichment\ET2'
@@ -264,7 +264,8 @@ for i, filename in enumerate(files):
     filename = os.path.basename(filename)
     if i==0:
         print("\n ***** Loading: " + filename)
-        ts, amp_data, dig_in, _, fs = read_data(os.path.join(dirname,rawfname,filename))
+        ts, amp_data, dig_in, analog_in, fs = read_data(os.path.join(dirname,rawfname,filename))
+        analog_in = analog_in[0]
         amp_data_n  = []
         for c in range(amp_data.shape[0]):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
