@@ -243,18 +243,18 @@ shift = np.tile(np.linspace(-1,0,32),16)
 
 # this need to be changed for each animal
 subsamplingfactor = 30
-dirname = 'U:\Rajat\Data-Enrichment\EERound2\CT2'
-rawfname = 'CT2_220105_160043'
-opdirname = 'E:\Enrichment\ET2'
-aname = 'CT2'
+dirname = 'Y:\Research\SPrecordings\Rajat_Data\Data-SWIL\SWILRound3\SWIL11'
+rawfname = 'RawData2'
+opdirname = os.path.join(dirname, rawfname)
+aname = 'SWIL'
 saveLFP = True
 saveAnalog = True
 
 #####
-lfp_filename = os.path.join(dirname,aname+'-lfp.npy')
-lfpts_filename = os.path.join(dirname,'lfpts.npy')
-digIn_filename = os.path.join(dirname, aname+'-digIn.npy')
-analogIn_filename = os.path.join(dirname, aname+'-analogIn.npy')
+lfp_filename = os.path.join(dirname,aname+'-lfp2.npy')
+lfpts_filename = os.path.join(dirname,'lfpts2.npy')
+digIn_filename = os.path.join(dirname, aname+'-digIn2.npy')
+analogIn_filename = os.path.join(dirname, aname+'-analogIn2.npy')
 analog_in = None
 dig_in = None
 amp_data_mmap = None
@@ -271,10 +271,10 @@ for i, filename in enumerate(files):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr1 = np.memmap(opdirname, filename[:-4]+'_VC_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
+        arr1 = np.memmap(os.path.join(opdirname, filename[:-4]+'_VC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
         arr1[:] = amp_data_n[:256,:].T
         del arr1
-        arr2 = np.memmap(opdirname, filename[:-4]+'_PPC_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
+        arr2 = np.memmap(os.path.join(opdirname, filename[:-4]+'_PPC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
         arr2[:] = amp_data_n[256:,:].T
         del arr2
         if saveLFP:
@@ -299,10 +299,10 @@ for i, filename in enumerate(files):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr1 = np.memmap(opdirname, filename[:-4]+'_VC_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
+        arr1 = np.memmap(os.path.join(opdirname, filename[:-4]+'_VC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
         arr1[:] = amp_data_n[:256,:].T
         del arr1
-        arr2 = np.memmap(opdirname, filename[:-4]+'_PPC_shifted.bin', dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
+        arr2 = np.memmap(os.path.join(opdirname, filename[:-4]+'_PPC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
         arr2[:] = amp_data_n[256:,:].T
         del arr2
         if saveLFP:
