@@ -1,5 +1,8 @@
 # mea
 **McNaughton lab ephys data analysis.** \
+
+**ORDER**  postProcessKs2.py -> plotPooledMetrics.py -> analyzeBehavFinal.py -> plotBehaviorAll.py -> mainRatemaps.py
+
 Note that many of these scripts are modified from different sources such as Allen Institute, IBL, cortex-lab, Intan, NWB, etc. I've tried to give credit whenever possible.
 
 
