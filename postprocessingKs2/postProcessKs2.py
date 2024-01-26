@@ -28,16 +28,16 @@ params['spread_threshold'] = 0.12
 
 # parameters for cluster quality metrics calculation
 qualParams = {} 
-qualParams['isi_threshold'] = 0.002 #refractory period
+qualParams['isi_threshold'] = 0.0018 #refractory period: 0.002
 qualParams['min_isi'] = 0.0002
-qualParams['isi_viol_th'] = 0.2 # 20% contamination
+qualParams['isi_viol_th'] = 0.3 # contamination: 0.2
 qualParams['presence_ratio'] = 0.7 # firing in 70% of behavior epochs
 qualParams['firing_rate_th'] = 0.01  # firing rate above 0.01 Hz
 #qualParams['amp_cutoff_th'] = 0.2 # missing only 20% of spikes below threshold
 qualParams['amp_th'] = 30 # ampltiude greater than 30 uV 
 
 # read csv with start and end time for each experimental animal
-dirname = r'.\Spikesorted-SWIL'
+dirname = r'X:\SWIL-Exp-Rajat\Spikesorted-SWIL'
 epochsfname = 'swil-animals.csv'
 epochsdf = pd.read_csv(os.path.join(dirname,epochsfname))
 filename = epochsdf['file_name']
@@ -56,7 +56,8 @@ for dname, st, et in zip(filename, start_time, end_time):
     channel_positionsY = channel_positions[:,1]
     amplitudes, spike_times, spike_clusters, templates, channel_map, cluster_ids, cluster_info = \
         uwm.load_kilosort_data(dname, fs, convert_to_seconds = False)
-    cluster_info = cluster_info[cluster_info['group']=='good']
+    cluster_info = cluster_info[(cluster_info['group']=='good') | pd.isna(cluster_info['group'])]
+    cluster_info['group'] = 'good'
     print('Finished loading kilosort data..')
 
     # load raw dat file data to load waveforms
@@ -89,8 +90,10 @@ for dname, st, et in zip(filename, start_time, end_time):
     if 'SWIL15VC' in dname or 'SWIL12PPC' in dname or 'SWIL20PPC' in dname:
         cluMetrics, spiketimesGood, spikeclustersGood = ucq.calcQualityMetrics(amplitudes, spike_times, spike_clusters, cluster_info, wfamp=wfMetrics['amp'], ampCE=None, epoch=[st,et], params=qualParams) #
     else:
-        cluMetrics, spiketimesGood, spikeclustersGood = ucq.calcQualityMetrics(amplitudes, spike_times, spike_clusters, cluster_info, wfamp=None, ampCE=ceMetrics['ampCE'], epoch=[st,et], params=qualParams) #
+        cluMetrics, spiketimesGood, spikeclustersGood = ucq.calcQualityMetrics(amplitudes, spike_times, spike_clusters, cluster_info, wfamp=None, ampCE=ceMetrics['wfampCE'], epoch=[st,et], params=qualParams) #
     print('Finished loading cluster quality metrics..')
+    
+    set(cluster_info.cluster_id) ^ set(ceMetrics.cluster_id)
     
     # concatenate data
     metrics = pd.merge(wfMetrics, cluMetrics, on="cluster_id", how="left")

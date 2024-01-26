@@ -41,6 +41,9 @@ for i=1:length(fnames)
 
     % load spikes and waveforms for good cluster
     spikes = loadSpikes('session',session);
+    
+    % read cluster info
+    cluinfo = tdfread(fullfile(analysisdirpath,'cluster_info.tsv'));
 
     % calculate waveform metrics
     sr = session.extracellular.sr;
@@ -53,7 +56,7 @@ for i=1:length(fnames)
     % fit ACGs
     fit_params = fit_ACG(acg_metrics.acg_narrow);
     close all;
-    
+
     % cell-type classification
     % All cells are initially assigned as Pyramidal cells
     putativeCellType = repmat({'Pyramidal Cell'},1,length(spikes.cluID));
@@ -62,7 +65,7 @@ for i=1:length(fnames)
     putativeCellType(waveform_metrics.troughtoPeak <= 0.425) = repmat({'Narrow Interneuron'},sum(waveform_metrics.troughtoPeak <= 0.425),1);
     % acg_tau_rise > 6 ms (preferences.putativeCellType.acg_tau_rise_boundary) and troughToPeak > 0.425 ms
     putativeCellType(fit_params.acg_tau_rise > 6 & waveform_metrics.troughtoPeak > 0.425) = repmat({'Wide Interneuron'},sum(fit_params.acg_tau_rise > 6 & waveform_metrics.troughtoPeak > 0.425),1);
-    
+
     % save output data in a csv file
     dat.cluID = spikes.cluID';
     dat.cellType = putativeCellType';
@@ -82,5 +85,5 @@ for i=1:length(fnames)
     dat = struct2table(dat);
     opfname = fullfile(basepath, 'analyzedMetrics', strcat(fname,'-CellExplorerUnitMetrics.csv'));
     writetable(dat,opfname);
-    clear dat
+    clear dat;
 end
