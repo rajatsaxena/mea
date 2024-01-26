@@ -28,9 +28,9 @@ params['spread_threshold'] = 0.12
 
 # parameters for cluster quality metrics calculation
 qualParams = {} 
-qualParams['isi_threshold'] = 0.0018 #refractory period: 0.002
+qualParams['isi_threshold'] = 0.002 #refractory period: 0.0018
 qualParams['min_isi'] = 0.0002
-qualParams['isi_viol_th'] = 0.3 # contamination: 0.2
+qualParams['isi_viol_th'] = 0.2 # contamination: 0.3
 qualParams['presence_ratio'] = 0.7 # firing in 70% of behavior epochs
 qualParams['firing_rate_th'] = 0.01  # firing rate above 0.01 Hz
 #qualParams['amp_cutoff_th'] = 0.2 # missing only 20% of spikes below threshold
