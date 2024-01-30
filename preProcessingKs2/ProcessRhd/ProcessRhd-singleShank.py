@@ -284,9 +284,9 @@ for i, filename in enumerate(files):
             fs = fs/float(subsamplingfactor)
             amp_ts_mmap = ts
             starts = amp_ts_mmap[-1]+1./fs
-            amp_data = np.apply_along_axis(decimateSig,1,amp_data_n)
-            amp_data = np.apply_along_axis(decimateSig2,1,amp_data_n)
-            amp_data_mmap = amp_data
+            amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n)
+            amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
+            amp_data_mmap = amp_data_n
             del amp_data_n
     else:
         print("\n ***** Loading: " + filename)
