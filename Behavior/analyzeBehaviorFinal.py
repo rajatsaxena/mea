@@ -57,8 +57,9 @@ for aname,adname,itidx in zip(animalsname,animalsdirname, indices):
     intants = loadintants(intanfilename, stidx=itidx[0], etidx=itidx[-1])
     # load processed data
     if 'SWIL11' in aname:
-        dat = processBehavFile(dat, samplerate=fs, VRradius=radiusVR, intants=None)
-        dat = dat.iloc[:len(intants)]
+        import pandas as pd
+        dat = pd.read_csv(os.path.join(adname, 'Behavior', 'SWIL11_behavdat.csv'))
+        intants = np.load(os.path.join(adname, 'Behavior','SWIL11_intants.npy'), allow_pickle=True)
         dat['time'] = intants
         vel = np.diff(dat['poscm'])/np.diff(intants)
         vel = np.insert(vel,0,np.nan)
