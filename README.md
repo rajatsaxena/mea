@@ -1,5 +1,5 @@
 # mea
-**McNaughton lab ephys data analysis.** \
+**McNaughton lab ephys data analysis.** 
 
 **ORDER** \
 extractWfAcgMetrics.m -> postProcessKs2.py -> plotPooledMetrics.py -> analyzeBehavFinal.py -> plotBehaviorAll.py -> mainRatemaps.py
@@ -27,7 +27,6 @@ Note that many of these scripts are modified from different sources such as Alle
   * decimateLFP_fs24.py.py: script to decimate LFPs by 24x for all recorded channels
   * mea.py: script with utils functions
   * detect_peaks.npy: script to detect peaks (similar to matlab)
-  
 
 * **Ratemaps** : scripts for generating rate for SWIL project
   * rmaputils.py: utils for generating ratemaps
