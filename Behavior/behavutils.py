@@ -189,24 +189,31 @@ def calcTrialData(dfhnum, trial_start, trial_end):
         trial_movement[tnum] = {'vel':vel, 'pos':pos, 'time':time}
     return trial_movement
 
+# calculate trial transition index
+# a bit hacky
+def calcTrialTransitionIdx(pos, dat):
+    posdiff = np.diff(pos)
+    idx = np.where(posdiff<-0.2)[0]
+    start_idx = idx+1
+    start_idx = np.insert(start_idx,0,0)
+    end_idx = idx+1
+    end_idx = np.append(end_idx,len(dat))
+    end_idx[1:] = end_idx[1:]-1
+    transitionsIdx = np.vstack((start_idx, end_idx)).T
+    return transitionsIdx
 
 # calculate hallways specific data
 def calcHallwayData(df, hnum, binwidth=1):
-    # create hallway specific dataframe
-    idx = np.where(np.array(df['hallnum'],dtype=int)==hnum)[0]
-    df_hnum = df.loc[idx,:].reset_index(drop=True)
-    # remove buggy matlab hallway number
-    dropidx = np.where(df_hnum['lapnum'].value_counts()<=2)[0]
-    df_hnum = df_hnum.drop(dropidx).reset_index(drop=True)
     # find trial start and end indices
-    trial_start_idx, trial_end_idx = trialTransition(df_hnum)
-    trial_transition = np.vstack((trial_start_idx, trial_end_idx)).T
-    diffidx = trial_transition[:,1] - trial_transition[:,0]
-    trial_transition = np.delete(trial_transition, np.where(diffidx<5)[0], axis=0)
+    trial_transition = calcTrialTransitionIdx(df['pos'], df)
     trial_start_idx, trial_end_idx = trial_transition[:,0], trial_transition[:,1]
-    trial_transition = np.array(df_hnum['time'])[trial_transition]
+    trial_transition_time = np.array(df['time'])[trial_transition]
+    hallwaynum = np.array(df['hallnum'][trial_transition[:,0]])
+    trial_transition_time = trial_transition_time[hallwaynum==hnum]
+    trial_transition = trial_transition[hallwaynum==hnum]
+    trial_start_idx, trial_end_idx = trial_transition[:,0], trial_transition[:,1]
     # calculate trial specific data
-    trial_data = calcTrialData(df_hnum, trial_start_idx, trial_end_idx)
+    trial_data = calcTrialData(df, trial_start_idx, trial_end_idx)
     # get binned speed, binned time count, binned time sum plot
     bintrial_speed, bintrial_timec, bintrial_timesum, bins = calcBinnedData(trial_data, binwidth=binwidth)
     
@@ -215,7 +222,7 @@ def calcHallwayData(df, hnum, binwidth=1):
             'binned_speed':bintrial_speed, 
             'binned_time':bintrial_timec,
             'binned_time_sum':bintrial_timesum,
-            'trial_transition':trial_transition,
+            'trial_transition':trial_transition_time,
             'xbins':bins}
 
 # plot all hallways data
