@@ -251,10 +251,10 @@ saveLFP = True
 saveAnalog = True
 
 #####
-lfp_filename = os.path.join(dirname,aname+'-lfp2.npy')
-lfpts_filename = os.path.join(dirname,'lfpts2.npy')
-digIn_filename = os.path.join(dirname, aname+'-digIn2.npy')
-analogIn_filename = os.path.join(dirname, aname+'-analogIn2.npy')
+lfp_filename = os.path.join(dirname,aname+'-lfp.npy')
+lfpts_filename = os.path.join(dirname,'lfpts.npy')
+digIn_filename = os.path.join(dirname, aname+'-digIn.npy')
+analogIn_filename = os.path.join(dirname, aname+'-analogIn.npy')
 analog_in = None
 dig_in = None
 amp_data_mmap = None
@@ -265,7 +265,6 @@ for i, filename in enumerate(files):
     if i==0:
         print("\n ***** Loading: " + filename)
         ts, amp_data, dig_in, analog_in, fs = read_data(os.path.join(dirname,rawfname,filename))
-        analog_in = analog_in[0]
         amp_data_n  = []
         for c in range(amp_data.shape[0]):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
@@ -321,7 +320,7 @@ for i, filename in enumerate(files):
             dig_in = np.array(np.concatenate((dig_in, digIN)), dtype='uint8')
             amp_ts_mmap = np.concatenate((amp_ts_mmap, ts))
             if saveAnalog:
-                analog_in = np.concatenate((analog_in, analogIN[0]), dtype=np.float32)
+                analog_in = np.concatenate((analog_in, analogIN), 1, dtype=np.float32)
 if saveLFP:
     np.save(lfp_filename, amp_data_mmap)
     np.save(lfpts_filename, amp_ts_mmap)
