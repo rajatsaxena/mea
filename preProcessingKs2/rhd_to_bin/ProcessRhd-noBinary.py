@@ -111,18 +111,18 @@ def dir_worker(d, roi_s, num_ch, saveLFP, saveAnalog,
             name, start, end = roi
             offset = roi_offsets[r_i]
             roi_data = amp_data_n[start:end+1]
-            shifted_path = os.path.join(sub_save_dir, name + '_shifted_merged.bin')
+            #shifted_path = os.path.join(sub_save_dir, name + '_shifted_merged.bin')
             rows, cols = roi_data.shape
             shape = (cols + int(offset / rows / 2), rows) # 16bits == 2bytes
             m = 'w+'
             if i > 0:
                 m = 'r+' # extend if already created
-            arr = np.memmap(shifted_path, dtype='int16', mode=m, shape=shape)
+            #arr = np.memmap(shifted_path, dtype='int16', mode=m, shape=shape)
             # update this ROI's binary file offset
-            roi_offsets[r_i] += 2 * np.prod(roi_data.shape, dtype=np.float64) 
+            #roi_offsets[r_i] += 2 * np.prod(roi_data.shape, dtype=np.float64) 
             # append to the end of the large binary file
-            arr[-cols:,:] = roi_data.T
-            del arr
+            #arr[-cols:,:] = roi_data.T
+            #del arr
         if saveLFP:
             # convert microvolts for lfp conversion
             amp_data_n = np.multiply(0.195, amp_data_n, dtype=np.float32)
