@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Feb  5 16:38:51 2024
+
+@author: jshobe
+"""
+
 #! /bin/env python
 #
 # Michael Gibson 17 July 2015
@@ -72,7 +79,7 @@ def read_data(filename):
 
         data = {}
         if (header['version']['major'] == 1 and header['version']['minor'] >= 2) or (header['version']['major'] > 1):
-            data['t_amplifier'] = np.zeros(num_amplifier_samples, dtype=np.int)
+            data['t_amplifier'] = np.zeros(num_amplifier_samples, dtype=np.int_)
         else:
             data['t_amplifier'] = np.zeros(num_amplifier_samples, dtype=np.uint)
 
@@ -86,11 +93,11 @@ def read_data(filename):
         # if unsigned int values are preferred(0 for False, 1 for True), replace the 'dtype=np.bool' argument with 'dtype=np.uint' as shown
         # the commented line below illustrates this for digital input data; the same can be done for digital out
         
-        #data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.uint)
-        data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.bool)
+#        data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.uint)
+        data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.bool_)
         data['board_dig_in_raw'] = np.zeros(num_board_dig_in_samples, dtype=np.uint)
         
-        data['board_dig_out_data'] = np.zeros([header['num_board_dig_out_channels'], num_board_dig_out_samples], dtype=np.bool)
+        data['board_dig_out_data'] = np.zeros([header['num_board_dig_out_channels'], num_board_dig_out_samples], dtype=np.bool_)
         data['board_dig_out_raw'] = np.zeros(num_board_dig_out_samples, dtype=np.uint)
 
         # Read sampled data from file.
@@ -194,7 +201,7 @@ def read_data(filename):
     result = data_to_result(header, data, data_present)
 
     print('Done!  Elapsed time: {0:0.1f} seconds'.format(time.time() - tic))
-    return result['t_amplifier'], result['amplifier_data'], data['board_dig_in_raw'], data['board_adc_data'], result['frequency_parameters']['amplifier_sample_rate']
+    return result['t_amplifier'], result['amplifier_data'], data['board_dig_in_data'], data['board_adc_data'], result['frequency_parameters']['amplifier_sample_rate']
 
 
 def plural(n):
@@ -243,22 +250,22 @@ shift = np.tile(np.linspace(-1,0,32),16)
 
 # this need to be changed for each animal
 subsamplingfactor = 30
-dirname = 'Y:\Research\SPrecordings\Rajat_Data\Data-SWIL\SWILRound3\SWIL11'
-rawfname = 'RawData2'
-opdirname = os.path.join(dirname, rawfname)
-aname = 'SWIL'
+dirname = r'Y:\Research\SPrecordings\Rajat_Data\Data-Enrichment\EERound3\CT5'
+rawfname = 'RawData'
+opdirname = r'X:\EE-Rajat\CT5'
+aname = 'CT5'
 saveLFP = True
 saveAnalog = True
 
 #####
 lfp_filename = os.path.join(dirname,aname+'-lfp.npy')
-lfpts_filename = os.path.join(dirname,'lfpts.npy')
 digIn_filename = os.path.join(dirname, aname+'-digIn.npy')
 analogIn_filename = os.path.join(dirname, aname+'-analogIn.npy')
 analog_in = None
 dig_in = None
 amp_data_mmap = None
 amp_ts_mmap = None
+digIn_ts_mmap = None
 files = natsorted(glob.glob(os.path.join(dirname,rawfname,'*.rhd')))
 for i, filename in enumerate(files):
     filename = os.path.basename(filename)
@@ -278,6 +285,7 @@ for i, filename in enumerate(files):
         del arr2
         if saveLFP:
             # convert microvolts for lfp conversion
+            digIn_ts_mmap = ts
             amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
             print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
             size = amp_data_n.shape[1]
@@ -289,6 +297,7 @@ for i, filename in enumerate(files):
             amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n)
             amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = amp_data_n
+            amp_ts_mmap = ts
             del amp_data_n
     else:
         print("\n ***** Loading: " + filename)
@@ -317,13 +326,11 @@ for i, filename in enumerate(files):
             amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n[:,startind:])
             amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = np.concatenate((amp_data_mmap, amp_data_n), 1)
-            dig_in = np.array(np.concatenate((dig_in, digIN)), dtype='uint8')
-            amp_ts_mmap = np.concatenate((amp_ts_mmap, ts))
+            dig_in = np.array(np.concatenate((dig_in, digIN), 1), dtype='uint8')
             if saveAnalog:
-                analog_in = np.concatenate((analog_in, analogIN), 1, dtype=np.float32)
+                analog_in = np.array(np.concatenate((analog_in, analogIN), 1), dtype=np.float32)
 if saveLFP:
     np.save(lfp_filename, amp_data_mmap)
-    np.save(lfpts_filename, amp_ts_mmap)
-    np.save(digIn_filename, dig_in)
+    np.save(digIn_filename, dig_in.T)
     if saveAnalog:
-        np.save(analogIn_filename, analog_in)
+        np.save(analogIn_filename, analog_in.T)
