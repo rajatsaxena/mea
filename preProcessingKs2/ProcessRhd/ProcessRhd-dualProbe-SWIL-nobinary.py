@@ -250,20 +250,21 @@ shift = np.tile(np.linspace(-1,0,32),16)
 
 # this need to be changed for each animal
 subsamplingfactor = 30
-dirname = r'Y:\Research\SPrecordings\Rajat_Data\Data-Enrichment\EERound3\CT5'
+dirname = r'Y:\Research\SPrecordings\Rajat_Data\Data-SWIL\SWILRound5\SWIL23'
+#dirname = r'/media/rajat/mcnlab_store2/Research/SPrecordings/Rajat_Data/Data-SWIL/SWILRound5/SWIL23'
 rawfname = 'RawData'
-opdirname = r'X:\EE-Rajat\CT5'
-aname = 'CT5'
+opdirname = dirname
+aname = 'SWIL23'
 saveLFP = True
 saveAnalog = True
 
 #####
 lfp_filename = os.path.join(dirname,aname+'-lfp.npy')
-digIn_filename = os.path.join(dirname, aname+'-digIn.npy')
+# digIn_filename = os.path.join(dirname, aname+'-digIn.npy')
 analogIn_filename = os.path.join(dirname, aname+'-analogIn.npy')
 analog_in = None
 dig_in = None
-digIn_ts_mmap = None
+amp_data_mmap = None
 files = natsorted(glob.glob(os.path.join(dirname,rawfname,'*.rhd')))
 for i, filename in enumerate(files):
     filename = os.path.basename(filename)
@@ -275,12 +276,6 @@ for i, filename in enumerate(files):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr1 = np.memmap(os.path.join(opdirname, filename[:-4]+'_VC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
-        arr1[:] = amp_data_n[:256,:].T
-        del arr1
-        arr2 = np.memmap(os.path.join(opdirname, filename[:-4]+'_PPC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
-        arr2[:] = amp_data_n[256:,:].T
-        del arr2
         if saveLFP:
             # convert microvolts for lfp conversion
             digIn_ts_mmap = ts
@@ -305,12 +300,6 @@ for i, filename in enumerate(files):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr1 = np.memmap(os.path.join(opdirname, filename[:-4]+'_VC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
-        arr1[:] = amp_data_n[:256,:].T
-        del arr1
-        arr2 = np.memmap(os.path.join(opdirname, filename[:-4]+'_PPC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
-        arr2[:] = amp_data_n[256:,:].T
-        del arr2
         if saveLFP:
             # convert microvolts for lfp conversion
             amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
@@ -324,11 +313,11 @@ for i, filename in enumerate(files):
             amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n[:,startind:])
             amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = np.concatenate((amp_data_mmap, amp_data_n), 1)
-            dig_in = np.array(np.concatenate((dig_in, digIN), 1), dtype='uint8')
+            # dig_in = np.array(np.concatenate((dig_in, digIN), 1), dtype='uint8')
             if saveAnalog:
                 analog_in = np.array(np.concatenate((analog_in, analogIN), 1), dtype=np.float32)
 if saveLFP:
     np.save(lfp_filename, amp_data_mmap)
-    np.save(digIn_filename, dig_in.T)
+    # np.save(digIn_filename, dig_in.T)
     if saveAnalog:
         np.save(analogIn_filename, analog_in.T)

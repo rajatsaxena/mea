@@ -264,8 +264,6 @@ analogIn_filename = os.path.join(dirname, aname+'-analogIn.npy')
 analog_in = None
 dig_in = None
 amp_data_mmap = None
-amp_ts_mmap = None
-digIn_ts_mmap = None
 files = natsorted(glob.glob(os.path.join(dirname,rawfname,'*.rhd')))
 for i, filename in enumerate(files):
     filename = os.path.basename(filename)
@@ -309,7 +307,6 @@ for i, filename in enumerate(files):
         del arr
         if saveLFP:
             # convert microvolts for lfp conversion
-            digIn_ts_mmap = np.concatenate((digIn_ts_mmap, ts))
             amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
             print("REAL FS = " + str(1./np.nanmedian(np.diff(ts))))
             size = amp_data_n.shape[1]
@@ -322,7 +319,6 @@ for i, filename in enumerate(files):
             amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
             amp_data_mmap = np.concatenate((amp_data_mmap, amp_data_n), 1)
             dig_in = np.array(np.concatenate((dig_in, digIN), 1), dtype='uint8')
-            amp_ts_mmap = np.concatenate((amp_ts_mmap, ts))
             if saveAnalog:
                 analog_in = np.array(np.concatenate((analog_in, analogIN), 1), dtype=np.float32)
 if saveLFP:
