@@ -10,6 +10,7 @@ Note that many of these scripts are modified from different sources such as Alle
 * **preprocessingKs2**:
   * IntanRhdToNWB.py: use rhdtonwb-SWIL.py script as a template for converting Intan RHD files to NWB data format
   * ProcessRhd: used to convert Intan RHD files to merged binary files (for Kilosort) after shift alignment, and extract merged 30x sub-sampled LFP, digital, and analog signals
+  * rhd_to_bin: optimized version of ProcessRhd by Rob bain to create merged binary files for raw data, sub-sampled lfp file, analog, and digital signals
     
 * **postprocessingKs2**: scripts for post-processing after spike-sorting and manual curation using Kilsort and Phy
   * utilsClusterQual.py: functions for cluster quality metrics (ISI violations, presence ratio, amplitude cutoff, firing rate threshold)
