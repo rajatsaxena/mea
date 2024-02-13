@@ -77,7 +77,7 @@ else:
     maindf.loc[(maindf.cellType!='Positive') & (maindf.cellType!='Biphasic') & (maindf.wftroughToPeak>0.425) &  (maindf.acgRiseTime<=6), 'cellType'] = 'E'
     
     # save metrics pooled across animals
-#    maindf.to_csv(os.path.join(dirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
+    maindf.to_csv(os.path.join(dirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
 print(maindf.cellType.value_counts())
 
 czc
