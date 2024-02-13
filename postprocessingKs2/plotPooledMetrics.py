@@ -77,8 +77,10 @@ else:
     maindf.loc[(maindf.cellType!='Positive') & (maindf.cellType!='Biphasic') & (maindf.wftroughToPeak>0.425) &  (maindf.acgRiseTime<=6), 'cellType'] = 'E'
     
     # save metrics pooled across animals
-    maindf.to_csv(os.path.join(dirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
+#    maindf.to_csv(os.path.join(dirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
 print(maindf.cellType.value_counts())
+
+czc
 
 # plot data with waveform properties
 figname = os.path.join(dirname,'analyzedMetrics','pooledWFAnimals.pdf')
@@ -98,7 +100,5 @@ plt.yticks(fontsize=18)
 plt.xticks(fontsize=18)
 sns.despine()
 plt.tight_layout()
-plt.show()
-dad
 plt.savefig(figname, dpi=300)
 plt.close()
