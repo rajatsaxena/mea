@@ -6,7 +6,7 @@ Created on Thu Nov 21 19:03:43 2019
 @author: rajat
 """
 
-import os
+import os, time
 import rmaputils 
 import numpy as np
 import pandas as pd
@@ -59,8 +59,9 @@ epochsdf = pd.read_csv(os.path.join(ephysdirname, epochsfname))
 filename = epochsdf['file_name']
 start_time, end_time = epochsdf['start_time'], epochsdf['end_time']
 # load pooled unit metrics for all animals
-pooledMetricsdf = pd.read_csv(os.path.join(ephysdirname,'analyzedMetrics',
-                                           'pooledMetricsAllAnimals.csv')).drop(['Unnamed: 0'],axis=1)
+pooledMetricsdf = pd.read_csv(os.path.join(ephysdirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
+if 'Unnamed: 0' in pooledMetricsdf.columns:
+    pooledMetricsdf = pooledMetricsdf.drop(['Unnamed: 0'],axis=1)
 
 # loop through all recordings from each animal
 for dname, st, et in zip(filename, start_time, end_time):
@@ -115,6 +116,7 @@ for dname, st, et in zip(filename, start_time, end_time):
     # iterate through spike timestamps
     spikedata = {}
     for cid, spikets, chnum, chidx in zip(clusterId, spiketimes, metricsAnimaldf.ch, channelIdx):
+        print(cid)
         if 'PPC' in dname:
             chnum = int(chnum + 256) # add to account for PPC channels being at the end
         else:
