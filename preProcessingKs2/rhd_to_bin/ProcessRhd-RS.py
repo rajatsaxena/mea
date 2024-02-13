@@ -7,7 +7,6 @@ import cupy as cp
 import numpy as np
 import scipy.signal as spsig
 from natsort import natsorted
-from numpy.lib.format import open_memmap
 # fixes "No module named intanutil" err
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
@@ -75,20 +74,25 @@ def dir_worker(d, roi_s, num_ch, saveLFP, saveAnalog,
         os.makedirs(sub_save_dir, exist_ok=True)
         sub_save_dir = os.path.abspath(sub_save_dir)
     
-    lfp_bin_name = os.path.join(sub_save_dir, animal_id+'-lfp.bin')
     lfp_filename = os.path.join(sub_save_dir, animal_id+'-lfp.npy')
-    lfpts_filename = os.path.join(sub_save_dir, animal_id+'-lfpts.npy')
+#    lfpts_filename = os.path.join(sub_save_dir, animal_id+'-lfpts.npy')
     digIn_filename = os.path.join(sub_save_dir, animal_id+'-digIn.npy')
-    digIn_ts_filename = os.path.join(sub_save_dir, animal_id+'-digInts.npy')
+#    digIn_ts_filename = os.path.join(sub_save_dir, animal_id+'-digInts.npy')
     analogIn_filename = os.path.join(sub_save_dir, animal_id+'-analogIn.npy')             
 
     starts = 0
+    true_shape = [num_ch, 0]
+    padded_shape = None
+    dtype = np.dtype('float32')
+    h_offset = None # .npy header offset
+    hd = None # lft.npy header dictionary
     dig_in = None
-    dig_in_ts = np.array([])
+#    dig_in_ts = np.array([])
     analog_in = None
-    amp_ts_mmap = np.array([])
+#    amp_ts_mmap = np.array([])
     roi_offsets = [0] * len(roi_s)
     lfp_offset = 0
+    running_sum = 0
     files = natsorted(glob.glob(os.path.join(d, '*.rhd')))
     if len(files) == 0:
         return
@@ -114,7 +118,7 @@ def dir_worker(d, roi_s, num_ch, saveLFP, saveAnalog,
             amp_data_n.append(shifted)
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        for r_i, roi in enumerate(roi_s):
+        for r_i, roi in enumerate(roi_s):            
             name, start, end = roi
             offset = roi_offsets[r_i]
             roi_data = amp_data_n[start:end+1]
@@ -144,40 +148,57 @@ def dir_worker(d, roi_s, num_ch, saveLFP, saveAnalog,
             amp_ts = ts[ind]
             starts = amp_ts[-1] + 1.0 / fs
             amp_data_n = downsample(subsample_factors, amp_data_n[:, start_i:])
+            if h_offset == None:
+                # need to create a header before knowing the true size
+                # we'll make it padded and flat, then correct later
+                padded_ts = amp_data_n.shape[1]
+                padded_ts *= len(files)
+                padded_ts = int(padded_ts + 1000)
+                padded_shape = (num_ch, padded_ts)
+                padded_shape = (np.prod(padded_shape, dtype=np.int64),)
+                hd = dict(
+                    descr=np.lib.format.dtype_to_descr(dtype),
+                    fortran_order=True, # required for matlab's readNPY
+                    shape=padded_shape,
+                )
+                with open(lfp_filename, 'w+b') as fp:
+                    np.lib.format._write_array_header(fp, hd, (1,0))
+                    h_offset = fp.tell() # always 128 but just to be safe
+            rows, cols = amp_data_n.shape
+            rhd_len = len(amp_data_n.flatten())
+            lfp_ = np.memmap(lfp_filename, dtype='float32', shape=padded_shape,
+                         mode='r+', offset=h_offset)
+            # running_sum += amp_data_n.astype(np.float64).sum()
+            lfp_[lfp_offset:lfp_offset+rhd_len] = amp_data_n.T.flatten()
+            lfp_offset += rhd_len
+            true_shape[1] = true_shape[1] + cols
+#            if i == len(files) - 1: # only run after processing last RHD
+#                lfp_sum = lfp_.astype(np.float64).sum()
+#                err_txt = f'{running_sum} !~= {lfp_sum}'
+#                # allow a very small amount of wiggle room
+#                assert abs(running_sum - lfp_sum) < 0.01, err_txt
+            del lfp_
             if type(dig_in) == type(None):
                 dig_in = digIN
             else:
                 dig_in = np.concatenate((dig_in, digIN), 1).astype(np.uint8)
-            dig_in_ts = np.concatenate((dig_in_ts, ts))
-            amp_ts_mmap = np.concatenate((amp_ts_mmap, amp_ts))
-            rows, cols = amp_data_n.shape
-            shape = (cols + round(lfp_offset / rows / 4), rows)
-            arr = np.memmap(lfp_bin_name, dtype='float32', mode=m, shape=shape)
-            lfp_offset += 4 * np.prod(amp_data_n.shape, dtype=np.float64) 
-            # append to the end of the large binary file
-            arr[-cols:,:] = amp_data_n.T
-            del arr
+#            dig_in_ts = np.concatenate((dig_in_ts, ts))
+#            amp_ts_mmap = np.concatenate((amp_ts_mmap, amp_ts))
         del amp_data_n
 
     if saveAnalog:
         np.save(analogIn_filename, analog_in)
+        del analog_in
     if saveLFP:
-        np.save(lfpts_filename, amp_ts_mmap)
-        np.save(digIn_ts_filename, dig_in_ts)
+        hd['shape'] = tuple(true_shape)
+        with open(lfp_filename, 'r+b') as fp:
+            np.lib.format._write_array_header(fp, hd, (1,0))
+#        np.save(lfpts_filename, amp_ts_mmap)
+#        del amp_ts_mmap
+#        np.save(digIn_ts_filename, dig_in_ts)
+#        del dig_in_ts
         np.save(digIn_filename, dig_in)
-        for c in range(num_ch):
-            lfp = np.memmap(lfp_bin_name, dtype='float32', mode=m, shape=shape)
-            assert lfp.shape[1] == num_ch, f'{lfp.shape[1]} != {num_ch}'
-            # create a memory-mapped .npy file with the same dimensions and dtype
-            m2 = 'r+'
-            if c == 0:
-                m2 = 'w+'
-            npy = open_memmap(lfp_filename, mode=m2, dtype=lfp.dtype, shape=lfp.shape[::-1])
-            # copy the array contents
-            npy[c,:] = lfp.T[c,:]
-            del lfp
-            del npy
-        os.remove(lfp_bin_name)
+        del dig_in
         
     # remove CRASHED file to signify processing completion
     os.remove(crash_file)
@@ -282,7 +303,7 @@ if __name__ == "__main__":
     shift = np.tile(np.linspace(-1,0,32), num_ch // 32)
     print()
     num_roi = f"{num_ch} recording channels found.\n"
-    num_roi += "How many ROIs were recorded from? "
+    num_roi += "How many region of interest were recorded from? "
     num_roi = int(input(num_roi))
     # [(naming_prefix, start channel, end channel)]
     roi_s = [("", 0, num_ch-1)]
