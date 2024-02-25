@@ -5,8 +5,8 @@
 
 import glob
 import numpy as np
-import os, time
-import cupy as cp # added by Rajat
+import cupy as cp
+import os, time, sys, psutil
 import scipy.signal as spsig
 from natsort import natsorted
 from intanutil.read_header import read_header
@@ -72,7 +72,7 @@ def read_data(filename):
 
         data = {}
         if (header['version']['major'] == 1 and header['version']['minor'] >= 2) or (header['version']['major'] > 1):
-            data['t_amplifier'] = np.zeros(num_amplifier_samples, dtype=np.int)
+            data['t_amplifier'] = np.zeros(num_amplifier_samples, dtype=np.int_)
         else:
             data['t_amplifier'] = np.zeros(num_amplifier_samples, dtype=np.uint)
 
@@ -87,10 +87,10 @@ def read_data(filename):
         # the commented line below illustrates this for digital input data; the same can be done for digital out
         
         #data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.uint)
-        data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.bool)
+        data['board_dig_in_data'] = np.zeros([header['num_board_dig_in_channels'], num_board_dig_in_samples], dtype=np.bool_)
         data['board_dig_in_raw'] = np.zeros(num_board_dig_in_samples, dtype=np.uint)
         
-        data['board_dig_out_data'] = np.zeros([header['num_board_dig_out_channels'], num_board_dig_out_samples], dtype=np.bool)
+        data['board_dig_out_data'] = np.zeros([header['num_board_dig_out_channels'], num_board_dig_out_samples], dtype=np.bool_)
         data['board_dig_out_raw'] = np.zeros(num_board_dig_out_samples, dtype=np.uint)
 
         # Read sampled data from file.
@@ -239,22 +239,22 @@ def channel_shift(data, sample_shifts):
 
 # variable to calculate shift
 # CHANGE this if needed
-shift = np.tile(np.linspace(-1,0,32),16)
+shift = np.tile(np.linspace(-1,0,32),8)
 
 # this need to be changed for each animal
 subsamplingfactor = 30
-dirname = 'Y:\Research\SPrecordings\Rajat_Data\Data-SWIL\SWILRound3\SWIL11'
-rawfname = 'RawData2'
-opdirname = os.path.join(dirname, rawfname)
-aname = 'SWIL'
+dirname = '/media/rajat/mcnlab_store2/Research/SPrecordings/Rajat_Data/Data-Enrichment/EERound2/ET2'
+rawfname = 'ET2_211228_174841'
+aname = 'ET2'
+opdirname = 'E:\Enrichment\ET2'
 saveLFP = True
-saveAnalog = True
+saveAnalog = False
 
 #####
-lfp_filename = os.path.join(dirname,aname+'-lfp2.npy')
-lfpts_filename = os.path.join(dirname,'lfpts2.npy')
-digIn_filename = os.path.join(dirname, aname+'-digIn2.npy')
-analogIn_filename = os.path.join(dirname, aname+'-analogIn2.npy')
+lfp_filename = os.path.join(dirname,aname+'-lfp.npy')
+lfpts_filename = os.path.join(dirname,aname+'-lfpts.npy')
+digIn_filename = os.path.join(dirname, aname+'-digIn.npy')
+analogIn_filename = os.path.join(dirname, aname+'-analogIn.npy')
 analog_in = None
 dig_in = None
 amp_data_mmap = None
@@ -271,12 +271,9 @@ for i, filename in enumerate(files):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr1 = np.memmap(os.path.join(opdirname, filename[:-4]+'_VC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
-        arr1[:] = amp_data_n[:256,:].T
-        del arr1
-        arr2 = np.memmap(os.path.join(opdirname, filename[:-4]+'_PPC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
-        arr2[:] = amp_data_n[256:,:].T
-        del arr2
+        arr = np.memmap(os.path.join(opdirname,filename[:-4]+'_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n.T.shape)
+        arr[:] = amp_data_n.T
+        del arr
         if saveLFP:
             # convert microvolts for lfp conversion
             amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
@@ -287,9 +284,9 @@ for i, filename in enumerate(files):
             fs = fs/float(subsamplingfactor)
             amp_ts_mmap = ts
             starts = amp_ts_mmap[-1]+1./fs
-            amp_data_n = np.apply_along_axis(decimateSig,1,amp_data_n)
-            amp_data_n = np.apply_along_axis(decimateSig2,1,amp_data_n)
-            amp_data_mmap = amp_data_n
+            amp_data = np.apply_along_axis(decimateSig,1,amp_data_n)
+            amp_data = np.apply_along_axis(decimateSig2,1,amp_data_n)
+            amp_data_mmap = amp_data
             del amp_data_n
     else:
         print("\n ***** Loading: " + filename)
@@ -299,12 +296,9 @@ for i, filename in enumerate(files):
             amp_data_n.append(np.array(channel_shift(np.array([amp_data[c]]), np.array([shift[c]]))[0] - 32768, dtype=np.int16))
         del amp_data
         amp_data_n = np.array(amp_data_n)
-        arr1 = np.memmap(os.path.join(opdirname, filename[:-4]+'_VC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[:256,:].T.shape)
-        arr1[:] = amp_data_n[:256,:].T
-        del arr1
-        arr2 = np.memmap(os.path.join(opdirname, filename[:-4]+'_PPC_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n[256:,:].T.shape)
-        arr2[:] = amp_data_n[256:,:].T
-        del arr2
+        arr = np.memmap(os.path.join(opdirname,filename[:-4]+'_shifted.bin'), dtype='int16', mode='w+', shape=amp_data_n.T.shape)
+        arr[:] = amp_data_n.T
+        del arr
         if saveLFP:
             # convert microvolts for lfp conversion
             amp_data_n = np.multiply(0.195,  amp_data_n, dtype=np.float32)
