@@ -7,6 +7,9 @@ extractWfAcgMetrics.m -> postProcessKs2.py -> plotPooledMetrics.py -> analyzeBeh
 Note that many of these scripts are modified from different sources such as Allen Institute, IBL, cortex-lab, Intan, NWB, etc. I've tried to give credit whenever possible.
 
 
+* **APHistology_RS**:
+  * demo_histology_pipeline_RS.m: main script to begin histology alignment with UCLA silicon probe data modified from https://github.com/petersaj/AP_histology
+  
 * **preprocessingKs2**:
   * IntanRhdToNWB.py: use rhdtonwb-SWIL.py script as a template for converting Intan RHD files to NWB data format
   * ProcessRhd: used to convert Intan RHD files to merged binary files (for Kilosort) after shift alignment, and extract merged 30x sub-sampled LFP, digital, and analog signals
