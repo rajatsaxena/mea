@@ -47,7 +47,7 @@ indices = [[1,-1], [None,None], [1,92716], [1,87204], [7399,70203], [10942,60279
 # mean speed across all animals
 meanSpeedAllAnimals = []
 # iterate through all behavior files
-for aname,adname,itidx in zip(animalsname[3:],animalsdirname[3:], indices[3:]):
+for aname,adname,itidx in zip(animalsname,animalsdirname, indices):
     print('Processing '+str(aname)+'...')
     # load behavior data file
     fname = glob.glob(os.path.join(adname,'Behavior','dis_vel_rew_*RECORDING.mat'))
@@ -82,16 +82,14 @@ for aname,adname,itidx in zip(animalsname[3:],animalsdirname[3:], indices[3:]):
             print(allhallwaydata[hnum]['binned_speed'].shape[0])
             meanSpeed.append(normspeed)
     meanSpeedAllAnimals.append(meanSpeed)
-    dada
     # plot all hallways data
-#    figname = os.path.join(adname,'Behavior',aname+'-behav.png')
-#    plotSpeedAcrossHallways(allhallwaydata, figname, aname, bin2cm=BIN2CM)
+    figname = os.path.join(adname,'Behavior',aname+'-behav.png')
+    plotSpeedAcrossHallways(allhallwaydata, figname, aname, bin2cm=BIN2CM)
     # save the data
     opfname = os.path.join(adname,'Behavior', aname+'-behavop.npy')
     np.save(opfname, allhallwaydata)
     del allhallwaydata
 meanSpeedAllAnimals = np.array(meanSpeedAllAnimals)
-
 
 # plot all animals speed across all environments
 xpos = np.linspace(0,314,meanSpeedAllAnimals.shape[-1])
