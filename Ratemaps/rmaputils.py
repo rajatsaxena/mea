@@ -17,6 +17,7 @@ import multiprocessing as mp
 sys.path.append('../LFP')
 import mea
 from detect_peaks import detect_peaks
+from temporalAutoCorrelogram import getBinnedISI
 
 #Find rightmost value less than or equal to x
 def find_le(a, x):
@@ -63,11 +64,13 @@ def binarySearch(data, val):
 # load spike times and cluster id for good units
 def loadGoodSpikeTimes(dirname, metricsdf):
     clusterId = np.array(metricsdf.cluster_id)
+    clusterDepth = np.array(metricsdf.depth)
+    region = np.array(metricsdf.brainRegion)
     if os.path.exists(os.path.join(dirname, 'proc-spiketimes.npy')) and os.path.exists(os.path.join(dirname, 'proc-spikeclusters.npy')):
         spikeclusters = np.load(os.path.join(dirname, 'proc-spikeclusters.npy'), allow_pickle=True)
         if (spikeclusters==clusterId).all():
             spiketimes = np.load(os.path.join(dirname, 'proc-spiketimes.npy'), allow_pickle=True)
-            return spiketimes, clusterId
+            return spiketimes, clusterId, clusterDepth, region
     return None
 
 # function to load the trial by trial data ocupancy data
@@ -103,8 +106,8 @@ def loadOccupancy(hallway_trial_data, posMin=0, posMax=314, binwidth=4, speedThr
                 rmv_idx = np.where((speed<=speedThr) | (speed>=120))[0]
                 new_pos[rmv_idx] = np.nan
                 # trial by trial occupancy map
-                omap, omapbins = np.histogram(new_pos, np.arange(posMin,posMax+binwidth,binwidth))
-                omaptrial.append(np.array(omap, dtype='float'))
+                omap, _ = np.histogram(new_pos, np.arange(posMin,posMax+binwidth,binwidth))
+                omaptrial.append(omap.astype('float'))
                 # note down start and end time of each trials 
                 posx.extend(new_pos)
                 post.extend(new_time)
@@ -118,14 +121,10 @@ def loadOccupancy(hallway_trial_data, posMin=0, posMax=314, binwidth=4, speedThr
     return posx, post, posSpd, trialSt, trialEt, omaptrial
 
 # function to process occupancy data
-def processOccupancy(omaptrial, posx,  posMin=0, posMax=400, binwidth=4, smwindow=0.25):
+def processOccupancy(omaptrial, posx,  posMin=0, posMax=314, binwidth=4, smwindow=0.25):
     # smooth the occupancy map across trials
     omaptrialsm = np.apply_along_axis(filter_1d, 1, omaptrial)
-    # normalized occupancy map across trials
-    omaptrialnorm = []
-    for omtn in omaptrial:
-        omaptrialnorm.append(omtn/np.nanmax(omtn))
-    omaptrialnorm = np.array(omaptrialnorm)
+    omaptrialnorm = omaptrial/np.nanmax(omaptrial, axis=1, keepdims=True)
     # generate occupancy map
     omap1d, omapbins = np.histogram(posx, np.arange(posMin,posMax+binwidth,binwidth))
     omap1dsm = scnd.filters.gaussian_filter(omap1d, smwindow)
@@ -133,7 +132,7 @@ def processOccupancy(omaptrial, posx,  posMin=0, posMax=400, binwidth=4, smwindo
     return omaptrialsm, omaptrialnorm, omap1d, omap1dsm, omapbins
 
 # function to process spike pos data
-def processSpikePos(spikets, spikephasehc, spikephaseself, trialStart, trialEnd, posX, posT, posSpd, lfpts):
+def processSpikePos(spikets, spikephasehc, trialStart, trialEnd, posX, posT, posSpd, lfpts):
     # variables to hold all the lap wise position and spike data
     # as well as overall spike pos, ts
     spkpos = []
@@ -142,7 +141,6 @@ def processSpikePos(spikets, spikephasehc, spikephaseself, trialStart, trialEnd,
     trspkpos = []
     trspkposts = []
     spkphasehc = []
-    spkphaseself = []
     # find spike time and pos for each trial
     for tss, tse in zip(trialStart, trialEnd):
         # variables to hold trial by trial spike pos, spike ts
@@ -152,8 +150,7 @@ def processSpikePos(spikets, spikephasehc, spikephaseself, trialStart, trialEnd,
         ind = np.where((spikets>=posT[0]) & (spikets<=posT[-1]) & (spikets>=tss) & (spikets<=tse))[0]
         spkts = spikets[ind]
         spkphshc = spikephasehc[ind]
-        spkphsself = spikephaseself[ind]
-        for ts, phshc, phsself in zip(spkts, spkphshc, spkphsself):
+        for ts, phshc in zip(spkts, spkphshc):
             if ts>=posT[0] and ts<=posT[-1]:
                 ind, val = binarySearch(posT, ts)
                 # add the timestamps to overall spike data per cell
@@ -164,7 +161,6 @@ def processSpikePos(spikets, spikephasehc, spikephaseself, trialStart, trialEnd,
                 tspkpos.append(posX[ind])
                 tspkposts.append(val)
                 spkphasehc.append(phshc)
-                spkphaseself.append(phsself)
         # add the individual trial data to overall trial by trial data
         trspkpos.append(tspkpos)
         trspkposts.append(tspkposts)
@@ -172,28 +168,22 @@ def processSpikePos(spikets, spikephasehc, spikephaseself, trialStart, trialEnd,
     spkposts = np.array(spkposts)
     spkposspeed = np.array(spkposspeed)
     spkphasehc = np.array(spkphasehc)
-    spkphaseself = np.array(spkphaseself)
     trspkpos = np.array(trspkpos)
     trspkposts = np.array(trspkposts)
     # return spike data
-    return spkpos, spkposts, spkposspeed, spkphasehc, spkphaseself, trspkpos, trspkposts
+    return spkpos, spkposts, spkposspeed, spkphasehc, trspkpos, trspkposts
 
 # fucntion process spikemap data
 def processSpikeMap(spkpostrial, spkpos, omapbins, posMin=0, posMax=314, binwidth=4, smwindow=1.0):
-    spkmaptrials = []
-    for trspkpos in spkpostrial:
-        spikecnt, _ = np.histogram(trspkpos, np.arange(posMin,posMax+binwidth,binwidth))
-        spkmaptrials.append(spikecnt)
-    spkmaptrials = np.array(spkmaptrials, dtype='float')
+    # calculat trial spike map
+    bin_edges = np.arange(posMin, posMax + binwidth, binwidth)
+    spkmaptrials = np.array([np.histogram(trspkpos, bins=bin_edges)[0] for trspkpos in spkpostrial], dtype='float')
     spkmaptrials[np.isnan(spkmaptrials)] = 0.0
     # smoothed spike map across trials
     spkmaptrialsm = np.apply_along_axis(filter_1d, 1, spkmaptrials)
     spkmaptrialsm[np.isnan(spkmaptrialsm)] = 0.0
     # normalized spike map across trials
-    spkmaptrialnorm = []
-    for spktsm in spkmaptrials:
-        spkmaptrialnorm.append(spktsm/np.nanmax(spktsm))
-    spkmaptrialnorm = np.array(spkmaptrialnorm)
+    spkmaptrialnorm = spkmaptrials/np.nanmax(spkmaptrials, axis=1, keepdims=True)
     # spikemap average over the session
     spkmap1d, _ = np.histogram(spkpos, bins=omapbins)
     spkmap1d = np.array(spkmap1d, dtype='float')
@@ -204,17 +194,12 @@ def processSpikeMap(spkpostrial, spkpos, omapbins, posMin=0, posMax=314, binwidt
 # function to calculate ratemap
 def processRateMap(spkmaptr, omaptr, spkmaptrsm, omaptrsm, spkmap1d, omap1d, spkmap1dsm, omap1dsm, fs=30.0):
     rmaptr = (spkmaptr/omaptr)*fs
-    rmaptr[np.isinf(rmaptr)] = 0.0
-    rmaptr[np.isnan(rmaptr)] = 0.0
+    rmaptr[~np.isfinite(rmaptr)] = 0.0
     # smoothed ratemap across trials
     rmaptrsm = (spkmaptrsm/omaptrsm)*fs
-    rmaptrsm[np.isinf(rmaptrsm)] = 0.0
-    rmaptrsm[np.isnan(rmaptrsm)] = 0.0
+    rmaptrsm[~np.isfinite(rmaptrsm)] = 0.0
     # normalized firing rate map across trials
-    rmaptrnorm = []
-    for rt in rmaptrsm:
-        rmaptrnorm.append(rt/np.nanmax(rt))
-    rmaptrnorm = np.array(rmaptrnorm)
+    rmaptrnorm = rmaptrsm/np.nanmax(rmaptrsm, axis=1, keepdims=True)
     # raw ratemap for entire session
     rmap1d = (spkmap1d/omap1d)*fs
     # smooth ratemap for the entire session
@@ -226,7 +211,7 @@ def processRateMap(spkmaptr, omaptr, spkmaptrsm, omaptrsm, spkmap1d, omap1d, spk
 # function to compute spatial information score
 def calcSpatialInformationScore(rateMap, occmap):    
     si = 0
-    occmap[np.isnan(occmap)] = 0.0
+    occmap = np.nan_to_num(occmap)  # Convert NaNs to zeros
     if np.nanmax(rateMap)>=0:
         #firing rates in occupied pixels
         rocc = rateMap[occmap>=0]
@@ -263,21 +248,24 @@ def calcShuffledSI(idx, observedSI, spikets, occmap1d, endTime, startTime, trial
     return si
 
 # calclate shuffled spatial info by shuffling for individual trials
-def calcShuffledSIByTrial(idx, observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
+def calcShuffledSIByTrial(idx, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
+    # Generate lag values for all trials at once
+    lags = np.random.uniform(2, trialEnd - trialStart, len(trialStart))
+    # Iterate over each trial using zip
     spkmaptrials = []
-    for ts,te in zip(trialStart, trialEnd):
-        #get a lag from 15seconds to behavior duration - 15seconds
-        lag = np.random.uniform(1, (te-ts), 1)[0]
-        spk = spikets[(spikets>=ts) & (spikets<=te)]
-        #remove spike timestamps which do not fall in maze time
-        shuffledSpikeTimestamps = ts + (spk + lag - ts) % (te-ts)
-        # get spike pos
-        spkpos = []
-        for sst in shuffledSpikeTimestamps:
-            if sst>=ts and sst<=te:
-                ind, val = binarySearch(posT, sst)
-                spkpos.append(posX[ind])
-        spkpos = np.array(spkpos)
+    for ts, te, lag in zip(trialStart, trialEnd, lags):
+        # Get spike timestamps within the trial time range
+        spk = spikets[(spikets >= ts) & (spikets <= te)]
+        # Calculate shuffled spike timestamps
+        shuffledSpikeTimestamps = ts + (spk + lag - ts) % (te - ts)
+        # Find indices where shuffledSpikeTimestamps are within the range [ts, te]
+        mask = (shuffledSpikeTimestamps >= ts) & (shuffledSpikeTimestamps <= te)
+        # Use boolean indexing to extract relevant timestamps and perform binary search
+        relevant_ssts = shuffledSpikeTimestamps[mask]
+        indices = np.searchsorted(posT, relevant_ssts)
+        #print(indices, posT[indices], relevant_ssts[indices])
+        # Filter posX using the obtained indices
+        spkpos = posX[indices[indices<len(posX)]]
         # function to process spike pos data
         spikecnt, _ = np.histogram(spkpos, np.arange(posMin,posMax+binwidth,binwidth))
         spkmaptrials.append(spikecnt)
@@ -293,24 +281,23 @@ def calcShuffledSIByTrial(idx, observedSI, spikets, occmap1d, endTime, startTime
 
 # function to get shuffled spatial information
 def calcShuffleSpatialInfo(observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed,  occmapbins, posMin=0, posMax=314, binwidth=4, fs=30.):
-    idx = np.arange(100)
+    lags = np.arange(100)
     from multiprocessing.dummy import Pool as ThreadPool
     pool = ThreadPool(10)
-    shuffledsi = pool.starmap(calcShuffledSIByTrial, zip(idx, repeat(observedSI), repeat(spikets), repeat(occmap1d), 
-                                             repeat(endTime), repeat(startTime), repeat(trialStart), 
-                                             repeat(trialEnd), repeat(posX), repeat(posT), repeat(posSpeed), 
-                                             repeat(occmapbins))) 
+    args = zip(lags, repeat(spikets), repeat(occmap1d), repeat(endTime), repeat(startTime), 
+               repeat(trialStart), repeat(trialEnd), repeat(posX), repeat(posT), repeat(posSpeed), 
+               repeat(occmapbins), repeat(posMin), repeat(posMax), repeat(binwidth), repeat(fs))
+    shuffledsi = pool.starmap(calcShuffledSIByTrial, args) 
     pool.close() 
     pool.join()
     return 1 - np.nansum(observedSI>shuffledsi)/len(shuffledsi), np.array(shuffledsi)
 
 # get sparsity calculation
 def calcSparsity(rmap, rmaptrials):
-    sparsity = np.nanmean(rmap)**2/ np.nanmean(rmap**2)
-    sparsityTrials = []
-    for rt in rmaptrials:
-        sp = np.nanmean(rt)**2/ np.nanmean(rt**2)
-        sparsityTrials.append(sp)
+    # Calculate sparsity for the overall rmap
+    sparsity = np.nanmean(rmap) ** 2 / np.nanmean(rmap ** 2)
+    # Calculate sparsity for each trial in rmaptrials
+    sparsityTrials = np.nanmean(rmaptrials, axis=1) ** 2 / np.nanmean(rmaptrials ** 2, axis=1)
     return np.round(sparsity,3), np.round(np.array(sparsityTrials),3)
     
 # get field stability
@@ -337,8 +324,8 @@ def rotatedPlacemap(rmap, rmaptrial):
 # field size determination
 def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=5, pixel2cm=4, L=314):
     rmap = rmap - np.nanmin(rmap)
-    placemap = np.zeros(len(rmap))
-    placemap[np.where(rmap >= thresholdrate)] = 1 #same as mosers' 1hz threshold
+    placemap = np.zeros_like(rmap, dtype=int)
+    placemap[rmap >= thresholdrate] = 1 #same as mosers' threshold
     placemap = measure.label(placemap)
     placemap = measure.label(placemap, background=0)
     numfields = np.max(placemap) #find num of fields
@@ -400,8 +387,7 @@ def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeak
 
 # calculate place field dispersion
 def getFieldDispersion(rmaptrial, plmap, pfcenter, nfields, cmconversion=4, L=314):
-    M = rmaptrial.shape[0]
-    N = rmaptrial.shape[1]
+    M, N = rmaptrial.shape
     placeFieldDispersion = []
     for i in range(nfields):
         C = pfcenter[i]*cmconversion
@@ -452,48 +438,40 @@ def getBestThetaChannel(lfp_data, fs=3000.0, f_band=(6,10)):
     return np.nanmean(mea.get_relative_power(P, F), f_band=f_band)
 
 # find phase for each spike
-def calcSpikePhase(thetapeaktime,spiketimestamps):
-    #variable to hold spike phase
-    spikephase = [] 
-    #iterate over each spike
-    for i in range(0,len(spiketimestamps)):
-        #assign phase=nan if it does not cross the threshold
-        #the second and condition is to account for that the spike occured after the 0th theta peak timestamps or before the last peak timestamps
-        if spiketimestamps[i]>=thetapeaktime[0] and spiketimestamps[i]<=thetapeaktime[-1]:
-            #find before and after thetapeak timestamps nearest to the ith spike
-            _, thetaPeakBefore = find_le(thetapeaktime,spiketimestamps[i])
-            _, thetaPeakAfter = find_ge(thetapeaktime,spiketimestamps[i])
-            #calculate the interpeak diff
-            interpeak_diff = thetaPeakAfter - thetaPeakBefore
-            #if theta peak after and theta peak before are same assign spike phase=0
-            if thetaPeakAfter==thetaPeakBefore:
-                spikephase.append(0.0)
-            #this is to account for the fact that the theta peak interval is within 1/6hz to 1/12 i.e. 0.16 to 0.08
-            #added a epsilon for now 0.2 to 0.05
-            #everyone has to play with this as per their data
-            elif 0.08 < interpeak_diff < 0.2:
-                #calculate by linear interpolation
-                # phase = ((spiketime - thetapeakbefore)/inter_peak_interval)*360
-                phase = round((float(spiketimestamps[i]-thetaPeakBefore)/interpeak_diff)*360,3)
-                spikephase.append(phase) 
-            #if the inter peak difference is outside assign nan
+def calcSpikePhase(thetapeaktime, spiketimestamps):
+    # Find nearest theta peaks for each spike timestamp
+    theta_peak_before_idx = np.searchsorted(thetapeaktime, spiketimestamps, side='right') - 1
+    theta_peak_after_idx = np.searchsorted(thetapeaktime, spiketimestamps, side='left')
+
+    spikephase = []
+    for before_idx, after_idx, spike_time in zip(theta_peak_before_idx, theta_peak_after_idx, spiketimestamps):
+        # Ensure spike time is within the range of theta peaks
+        if 0 <= before_idx < len(thetapeaktime)-1 and 0 <= after_idx < len(thetapeaktime):
+            theta_peak_before = thetapeaktime[before_idx]
+            theta_peak_after = thetapeaktime[after_idx]          
+            # Calculate inter-peak interval
+            interpeak_diff = theta_peak_after - theta_peak_before
+            if interpeak_diff > 0.08 and interpeak_diff < 0.2:
+                # Calculate spike phase by linear interpolation
+                phase = round(((spike_time - theta_peak_before) / interpeak_diff) * 360, 3)
+                spikephase.append(phase)
             else:
                 spikephase.append(np.nan)
-        #phase=nan did not cross threshold
         else:
             spikephase.append(np.nan)
     return np.array(spikephase)
 
+
 # function to spike phase data 
-def calcThetaPeaks(filename, chnum, sessionStart, sessionEnd, f_range=(6,10), fsl=3000.0, ampth=0.7):
+def calcThetaPeaks(filename, chnum, sessionStart, sessionEnd, eeg_times=None, f_range=(6,10), fsl=3000.0, ampth=0.7):
     # load lFP data
     dtl=1./fsl
-    lfpsig = np.load(filename, mmap_mode='r')
-    eeg_sig = lfpsig[chnum,:]
-    del lfpsig
-    eeg_times = np.array(np.arange(0, len(eeg_sig)*dtl, dtl), dtype='float32')
-    behav_end_idx = np.where(eeg_times<=sessionEnd)[0][-1]
-    behav_start_idx = np.where(eeg_times>=sessionStart)[0][0]
+    eeg_sig = np.load(filename, mmap_mode='r')[chnum, :]
+    if eeg_times is None:
+        eeg_times = np.arange(0, len(eeg_sig) * dtl, dtl)[:len(eeg_sig)]
+    # slice lfp data based on behavior
+    behav_start_idx = np.argmax(eeg_times >= sessionStart)
+    behav_end_idx = np.argmax(eeg_times >= sessionEnd)
     eeg_sig = eeg_sig[behav_start_idx:behav_end_idx]
     eeg_times = eeg_times[behav_start_idx:behav_end_idx]
     
@@ -505,7 +483,7 @@ def calcThetaPeaks(filename, chnum, sessionStart, sessionEnd, f_range=(6,10), fs
     theta_peakindices = detect_peaks(theta_eeg_sig, mph=ampthresh, mpd=int(fsl/10.), show=False)
     #calculate the amplitude and time for theta peak
     thetapeaktime = eeg_times[theta_peakindices]
-    return thetapeaktime, eeg_times
+    return thetapeaktime, eeg_times, theta_eeg_sig, theta_eeg_sig[theta_peakindices]
 
 # calculate TMI
 def calcTMI(phase, bins=np.arange(0,4*360+15,15)):
@@ -519,47 +497,52 @@ def calcTMI(phase, bins=np.arange(0,4*360+15,15)):
     return tmi, count, edges
 
 # function to generate analysis report
-def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, linecolors, posMin=0, posMax=314, binwidth=3.14):
+def genAnalysisReport(adat, aname, spikets, HALLWAYS, cid, region, depth, rewardLocs, xt, xtcm,  colors, linecolors, posMin=0, posMax=314, binwidth=3.14):
     fig, ax = plt.subplots(nrows=6, ncols=4, figsize=(20,10))
+    # plot temporal acg
+    acg = np.asarray(getBinnedISI(spikets*1e6, len(spikets)))
+    acg[48:53] = 0.0
+    acgEdges = np.arange(-1000,1010,20)
+    ax[0][3].plot(acgEdges, acg/np.nanmax(acg), c='k')
+    for x_ in [125,-125,250,-250,375,-375,500,-500]:
+        ax[0][3].axvline(x=x_, c='r', linestyle='--')
+    ax[0][3].set_xlabel('Time (ms)', fontsize=18)
+    ax[0][3].set_xlim([-1000,1000])
+    ax[0][3].set_ylim([0, 1.2])
     for h,hnum in enumerate(HALLWAYS):
         # trajectory plot
-        ax[0][h].plot(animaldat[hnum]['posX'], animaldat[hnum]['posT'], color='k', linewidth=1, rasterized=True)
-        ax[0][h].scatter(animaldat['spikedata'][cid][hnum]['spkPos'], animaldat['spikedata'][cid][hnum]['spkPosts'], color=linecolors[hnum], s=10, rasterized=True)
+        ax[0][h].plot(adat[hnum]['posX'], adat[hnum]['posT'], color='k', linewidth=1, rasterized=True)
+        ax[0][h].scatter(adat['spikedata'][cid][hnum]['spkPos'], adat['spikedata'][cid][hnum]['spkPosts'], color=linecolors[hnum], s=10, rasterized=True)
         # occ map
-        ax[1][h].imshow(animaldat[hnum]['omaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
+        ax[1][h].imshow(adat[hnum]['omaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
         ax[1][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
         ax[1][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
         # spike map
-        ax[2][h].imshow(animaldat['spikedata'][cid][hnum]['spkmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
+        ax[2][h].imshow(adat['spikedata'][cid][hnum]['spkmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
         ax[2][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
         ax[3][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
         # rate map
-        ax[3][h].imshow(animaldat['spikedata'][cid][hnum]['rmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
+        ax[3][h].imshow(adat['spikedata'][cid][hnum]['rmaptrsm'], aspect='auto', cmap=colors[hnum], rasterized=True)
         ax[3][h].axvline(x=rewardLocs[hnum][0]*posMax//binwidth, c='k', linestyle='--')
         ax[3][h].axvline(x=rewardLocs[hnum][1]*posMax//binwidth, c='k', linestyle='--')
         # mean over occ, spike, and ratemap plot
-        ax[1][3].plot(np.nanmean(animaldat[hnum]['omaptrsm'],0), color=linecolors[hnum], rasterized=True)
-        ax[2][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['spkmaptrsm'],0), color=linecolors[hnum])
-        ax[3][3].plot(np.nanmean(animaldat['spikedata'][cid][hnum]['rmaptrsm'],0), color=linecolors[hnum])
+        ax[1][3].plot(np.nanmean(adat[hnum]['omaptrsm'],0), color=linecolors[hnum], rasterized=True)
+        ax[2][3].plot(np.nanmean(adat['spikedata'][cid][hnum]['spkmaptrsm'],0), color=linecolors[hnum])
+        ax[3][3].plot(np.nanmean(adat['spikedata'][cid][hnum]['rmaptrsm'],0), color=linecolors[hnum])
         # theta phase precession plot for HC phase
-        phase = animaldat['spikedata'][cid][hnum]['spkPhaseHC']
-        pos = animaldat['spikedata'][cid][hnum]['spkPos']
+        phase = adat['spikedata'][cid][hnum]['spkPhaseHC']
+        pos = adat['spikedata'][cid][hnum]['spkPos']
         pos = np.concatenate((pos,pos))
         phase = np.concatenate((phase, phase+360))
         ax[4][h].scatter(pos, phase, color=linecolors[hnum], s=1, rasterized=True)
         ax[4][h].axvline(x=rewardLocs[hnum][0]*posMax, c='k', linestyle='--')
         ax[4][h].axvline(x=rewardLocs[hnum][1]*posMax, c='k', linestyle='--')
-        # theta phase precession plot for self
-        phase = animaldat['spikedata'][cid][hnum]['spkPhaseSelf']
-        pos = animaldat['spikedata'][cid][hnum]['spkPos']
-        pos = np.concatenate((pos,pos))
-        phase = np.concatenate((phase, phase+360))
-        ax[5][h].scatter(pos, phase, color=linecolors[hnum], s=1, rasterized=True)
+        # overall tmi
+        ax[4][3].plot(adat['spikedata'][cid][hnum]['phasebins'][:-1], adat['spikedata'][cid][hnum]['tmicounthc'], color=linecolors[hnum], rasterized=True)
+        # binned theta phase precession
+        ax[5][h].hist2d(pos, phase, bins=[100,48], range=[[0,314], [0,720]], cmap=colors[hnum])
         ax[5][h].axvline(x=rewardLocs[hnum][0]*posMax, c='k', linestyle='--')
         ax[5][h].axvline(x=rewardLocs[hnum][1]*posMax, c='k', linestyle='--')
-        # overall tmi
-        ax[4][3].plot(animaldat['spikedata'][cid][hnum]['phasebins'][:-1], animaldat['spikedata'][cid][hnum]['tmicounthc'], color=linecolors[hnum], rasterized=True)
-        ax[5][3].plot(animaldat['spikedata'][cid][hnum]['phasebins'][:-1], animaldat['spikedata'][cid][hnum]['tmicountself'], color=linecolors[hnum], rasterized=True)
         # label settings
         if hnum==1:
             ax[0][h].set_ylabel('Time (s)', fontsize=18)
@@ -576,7 +559,7 @@ def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, l
         ax[3][h].set_xticks(xt), ax[3][h].set_xticklabels(xtcm)
         ax[3][3].set_xticks(xt), ax[3][3].set_xticklabels(xtcm)
         ax[4][h].set_xticks(xtcm)
-        ax[5][h].set_xticks(xtcm)
+        ax[5][h].set_xticks(xt), ax[5][h].set_xticks(xtcm)
         ax[0][h].set_xlim([0,314])
         ax[1][h].set_xlim([0,100])
         ax[2][h].set_xlim([0,100])
@@ -588,13 +571,13 @@ def genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm,  colors, l
     ax[2][3].set_xlim([0,100])
     ax[3][3].set_xlim([0,100])
     # firing statistics for each cell and hallway
-    sth1 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][1]['sinfo'],1))
-    sth2 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][2]['sinfo'],1))
-    sth28 = 'pk:'+str(round(np.max(np.nanmean(animaldat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(animaldat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', i:'+str(round(animaldat['spikedata'][cid][28]['sinfo'],1))
-    ax[0][3].text(0.01,0.9,'Hall#1: ' + sth1)
-    ax[0][3].text(0.01,0.6,'Hall#2: ' + sth2)
-    ax[0][3].text(0.01,0.3,'Hall#28: ' + sth28)
-    ax[0][3].set_axis_off()
-    plt.suptitle('Cluster: ' + str(cid), fontsize=20)
+    sth1 = 'pk:'+str(round(np.max(np.nanmean(adat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][1]['sinfo'],1))
+    sth2 = 'pk:'+str(round(np.max(np.nanmean(adat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][2]['sinfo'],1))
+    sth28 = 'pk:'+str(round(np.max(np.nanmean(adat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][28]['sinfo'],1))
+    ax[5][3].text(0.01,0.9,'Hall#1: ' + sth1)
+    ax[5][3].text(0.01,0.6,'Hall#2: ' + sth2)
+    ax[5][3].text(0.01,0.3,'Hall#28: ' + sth28)
+    ax[5][3].set_axis_off()
+    plt.suptitle('Aname: ' + aname + ', CId: ' + str(cid) + ', Depth: ' + str(depth) + ', Region: ' + region, fontsize=20)
     plt.tight_layout()
     return fig

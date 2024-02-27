@@ -6,11 +6,12 @@ Created on Thu Nov 21 19:03:43 2019
 @author: rajat
 """
 
-import os, time
+import os
 import rmaputils 
 import numpy as np
 import pandas as pd
 import pylab as plt
+from tqdm import tqdm
 import scipy.io as spio
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -42,26 +43,27 @@ amplfpth = 0.7
 phasebins = np.arange(0,4*360+10,10)
 
 # read csv with start and end time for each experimental animal
-ephysdirname = r'X:\SWIL-Exp-Rajat\Spikesorted-SWIL'
-behavdirname = r'X:\SWIL-Exp-Rajat\Behavior-SWIL'
-lfpdirname = r'X:\SWIL-Exp-Rajat\LFP-SWIL'
-rmapdirname = r'X:\SWIL-Exp-Rajat\Ratemaps-SWIL'
+ephysdirname = r'T:\SWIL-Rajat\Spikesorted-SWIL'
+behavdirname = r'T:\SWIL-Rajat\Behavior-SWIL'
+lfpdirname = r'T:\SWIL-Rajat\LFP-SWIL'
+rmapdirname = r'T:\SWIL-Rajat\Ratemaps-SWIL'
 epochsfname = 'swil-animals.csv'
 # load default channel map
-rezdat = spio.loadmat(r'X:\SWIL-Exp-Rajat\analysis-scripts\postProcessingKS2\chanMap_intan256F_bottom_SM.mat')
+rezdat = spio.loadmat(r'T:\SWIL-Rajat\analysis-scripts\postProcessingKS2\chanMap_intan256F_bottom_SM.mat')
 xcoords = np.ravel(rezdat['xcoords'])
 ycoords = np.ravel(rezdat['ycoords'])
 channelpos = np.array(np.stack((xcoords,ycoords)).T, dtype='int16')
 refHCChnum = 20
-del rezdat
+del xcoords,ycoords,rezdat
 # load each recording epochs file
 epochsdf = pd.read_csv(os.path.join(ephysdirname, epochsfname))
 filename = epochsdf['file_name']
-start_time, end_time = epochsdf['start_time'], epochsdf['end_time']
+start_time, end_time, referenceHC = epochsdf['start_time'], epochsdf['end_time'], epochsdf['referenceHC']
 # load pooled unit metrics for all animals
 pooledMetricsdf = pd.read_csv(os.path.join(ephysdirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
 if 'Unnamed: 0' in pooledMetricsdf.columns:
     pooledMetricsdf = pooledMetricsdf.drop(['Unnamed: 0'],axis=1)
+pooledMetricsdf['brainRegion'] = 'test'
 
 # loop through all recordings from each animal
 for dname, st, et in zip(filename, start_time, end_time):
@@ -71,7 +73,7 @@ for dname, st, et in zip(filename, start_time, end_time):
         aname = dname[:-3]
     else:
         aname = dname[:-2]
-    animaldat = {} # save each animals data 
+    adat = {} # save each animals data 
     
     # load behavior data
     behavdata = np.load(os.path.join(behavdirname,aname+'-behavop.npy'), allow_pickle=True).item()
@@ -84,93 +86,93 @@ for dname, st, et in zip(filename, start_time, end_time):
         posX, posT, posSpeed, trStart, trEnd, omaptr = rmaputils.loadOccupancy(behavd, posMin=posMin, 
                                                                                   posMax=posMax, binwidth=binwidth, 
                                                                                   speedThr=speedTh, dt=dt)
+        
         # create occupancy map
         omaptrsm, omaptrnorm, omap1d, omap1dsm, omapbins = rmaputils.processOccupancy(omaptr, posX, 
                                                                                       posMin=posMin, posMax=posMax, 
                                                                                       binwidth=binwidth, smwindow=gsmooth)
         # save hallway occupancy data for each animal
-        animaldat[hallwaynum] = {}
-        animaldat[hallwaynum]['posX'] = posX
-        animaldat[hallwaynum]['posT'] = posT
-        animaldat[hallwaynum]['posSpeed'] = posSpeed
-        animaldat[hallwaynum]['trStart'] = trStart
-        animaldat[hallwaynum]['trEnd'] = trEnd
-        animaldat[hallwaynum]['omaptr'] = omaptr
-        animaldat[hallwaynum]['omaptrsm'] = omaptrsm
-        animaldat[hallwaynum]['omaptrnorm'] = omaptrnorm
-        animaldat[hallwaynum]['omap1d'] = omap1d
-        animaldat[hallwaynum]['omap1dsm'] = omap1dsm
-        animaldat[hallwaynum]['omapbins'] = omapbins
-    del posX, posT, posSpeed, trStart, trEnd, omaptr, omaptrsm, omaptrnorm, omap1d, omap1dsm, omapbins
+        adat[hallwaynum] = {}
+        adat[hallwaynum]['posX'] = posX
+        adat[hallwaynum]['posT'] = posT
+        adat[hallwaynum]['posSpeed'] = posSpeed
+        adat[hallwaynum]['trStart'] = trStart
+        adat[hallwaynum]['trEnd'] = trEnd
+        adat[hallwaynum]['omaptr'] = omaptr
+        adat[hallwaynum]['omaptrsm'] = omaptrsm
+        adat[hallwaynum]['omaptrnorm'] = omaptrnorm
+        adat[hallwaynum]['omap1d'] = omap1d
+        adat[hallwaynum]['omap1dsm'] = omap1dsm
+        adat[hallwaynum]['omapbins'] = omapbins
+    del posX, posT, posSpeed, trStart, trEnd 
+    del omaptr, omaptrsm, omaptrnorm, omap1d, omap1dsm, omapbins
+    del behavd, behavdata
     
     # load spiketimes and cluster id for good unit for a given recording
     metricsAnimaldf = pooledMetricsdf[pooledMetricsdf.aname==dname]
-    spiketimes, clusterId = rmaputils.loadGoodSpikeTimes(os.path.join(ephysdirname,dname), metricsAnimaldf)
+    spiketimes, clusterId, clusterDepth, brainRegion = rmaputils.loadGoodSpikeTimes(os.path.join(ephysdirname,dname), metricsAnimaldf)
     
     # load channel indices for lfp data and lfp filename
     channelIdx, channelmap = rmaputils.loadCorrectedChanMap(ephysdirname, dname, clusterId, metricsAnimaldf, channelpos)
     lfpfilename = os.path.join(lfpdirname, aname+'_lfp.npy')
+    if os.path.exists(os.path.join(lfpdirname, aname+'_lfpts.npy')):
+        lfpts = np.load(os.path.join(lfpdirname, aname+'_lfpts.npy'), allow_pickle=True)
+    else:
+        lfpts = None
     # load theta peak times for reference hippocampus electrode
-    refThetaPeaks, lfpts = rmaputils.calcThetaPeaks(lfpfilename, refHCChnum, st, et, f_range=f_theta, fsl=fslfp, ampth=amplfpth)
+    # slm layer electrode pre-determines marked as reference
+    refThetaPeaks, lfpts, lfpsig, thetapk = rmaputils.calcThetaPeaks(lfpfilename, refHCChnum, st, et, eeg_times=lfpts, f_range=f_theta, fsl=fslfp, ampth=amplfpth)
         
     # iterate through spike timestamps
     spikedata = {}
-    for cid, spikets, chnum, chidx in zip(clusterId, spiketimes, metricsAnimaldf.ch, channelIdx):
-        print(cid)
+    for cid, spikets, chnum, chidx in tqdm(zip(clusterId, spiketimes, metricsAnimaldf.ch, channelIdx)):
         if 'PPC' in dname:
             chnum = int(chnum + 256) # add to account for PPC channels being at the end
         else:
             chnum = int(chidx)
         # load LFP from reference hc + current unit channel
         spkPhaseRefHC = rmaputils.calcSpikePhase(refThetaPeaks, spikets)
-        selfThetaPeaks, _ = rmaputils.calcThetaPeaks(lfpfilename, chnum, st, et, f_range=f_theta, fsl=fslfp, ampth=amplfpth)
-        spkPhaseRefSelf = rmaputils.calcSpikePhase(selfThetaPeaks, spikets)
         
         celldata = {} # dict to hold spike data for each neurons in each hallway
         for hallwaynum in HALLWAYS:
             celldata[hallwaynum] = {} 
             # calculate spike pos data
-            spkPos, spkPosts, spkPosSpeed, spkPhaseHC, spkPhaseSelf, spkPosTrial, spkPostsTrial = rmaputils.processSpikePos(spikets, spkPhaseRefHC, spkPhaseRefSelf, 
-                                                                                                                            animaldat[hallwaynum]['trStart'], 
-                                                                                                                            animaldat[hallwaynum]['trEnd'],  
-                                                                                                                            animaldat[hallwaynum]['posX'], 
-                                                                                                                            animaldat[hallwaynum]['posT'], 
-                                                                                                                            animaldat[hallwaynum]['posSpeed'],
-                                                                                                                            lfpts)
+            spkPos, spkPosts, spkPosSpeed, spkPhaseHC, spkPosTrial, spkPostsTrial = rmaputils.processSpikePos(spikets, spkPhaseRefHC, adat[hallwaynum]['trStart'], 
+                                                                                                              adat[hallwaynum]['trEnd'], adat[hallwaynum]['posX'], 
+                                                                                                              adat[hallwaynum]['posT'], adat[hallwaynum]['posSpeed'], 
+                                                                                                              lfpts)
             # calcualte spike map
-            spkmaptr, spkmaptrsm, spkmaptrnorm, spkmap1d, spkmap1dsm = rmaputils.processSpikeMap(spkPosTrial, spkPos, 
-                                                                                                 animaldat[hallwaynum]['omapbins'], posMin=posMin, 
-                                                                                                 posMax=posMax, binwidth=binwidth, 
-                                                                                                 smwindow=gsmooth)
+            spkmaptr, spkmaptrsm, spkmaptrnorm, spkmap1d, spkmap1dsm = rmaputils.processSpikeMap(spkPosTrial, spkPos, adat[hallwaynum]['omapbins'], posMin=posMin, 
+                                                                                                 posMax=posMax, binwidth=binwidth, smwindow=gsmooth)
+            
             # calculate ratemaps
-            rmaptr, rmaptrsm, rmaptrnorm, rmap1d, rmap1dsm, _ = rmaputils.processRateMap(spkmaptr, animaldat[hallwaynum]['omaptr'], spkmaptrsm, 
-                                                                                                animaldat[hallwaynum]['omaptrsm'], spkmap1d, 
-                                                                                                animaldat[hallwaynum]['omap1d'], spkmap1dsm, 
-                                                                                                animaldat[hallwaynum]['omap1dsm'], fs=fspos)
+            rmaptr, rmaptrsm, rmaptrnorm, rmap1d, rmap1dsm, _ = rmaputils.processRateMap(spkmaptr, adat[hallwaynum]['omaptr'], spkmaptrsm, 
+                                                                                                adat[hallwaynum]['omaptrsm'], spkmap1d, 
+                                                                                                adat[hallwaynum]['omap1d'], spkmap1dsm, 
+                                                                                                adat[hallwaynum]['omap1dsm'], fs=fspos)
+            
             # firing statistics: spatial information, sparsity, stability index
-            sinfo = rmaputils.calcSpatialInformationScore(rmap1dsm, animaldat[hallwaynum]['omap1dsm'])
+            sinfo = rmaputils.calcSpatialInformationScore(rmap1dsm, adat[hallwaynum]['omap1dsm'])
             sparsity, _ = rmaputils.calcSparsity(rmap1dsm, rmaptrsm)
             stabilityInd = rmaputils.calcStabilityIndex(rmaptrsm)
             # spatialinfo significance
-            sinfo_p, shuffledinfo = rmaputils.calcShuffleSpatialInfo(sinfo, spikets, animaldat[hallwaynum]['omap1dsm'], animaldat[hallwaynum]['posT'][-1], 
-                                                                     animaldat[hallwaynum]['posT'][0], animaldat[hallwaynum]['trStart'], animaldat[hallwaynum]['trEnd'], 
-                                                                     animaldat[hallwaynum]['posX'], animaldat[hallwaynum]['posT'], animaldat[hallwaynum]['posSpeed'],  
-                                                                     animaldat[hallwaynum]['omapbins'], posMin=posMin, posMax=posMax, binwidth=binwidth, fs=fspos)
+            sinfo_p, shuffledinfo = rmaputils.calcShuffleSpatialInfo(sinfo, spikets, adat[hallwaynum]['omap1dsm'], adat[hallwaynum]['posT'][-1], 
+                                                                     adat[hallwaynum]['posT'][0], adat[hallwaynum]['trStart'], adat[hallwaynum]['trEnd'], 
+                                                                     adat[hallwaynum]['posX'], adat[hallwaynum]['posT'], adat[hallwaynum]['posSpeed'],  
+                                                                     adat[hallwaynum]['omapbins'], posMin=posMin, posMax=posMax, binwidth=binwidth, fs=fspos)
             # get placefield statistics: num field, field peak firing rate, size, center, dispersion
             if sinfo_p<0.01:
                 pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields, pfDispersion = rmaputils.calcfieldSize(rmap1dsm, rmaptrsm, pixel2cm=bin2cm, L=posMax)
             else:
                 pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields, pfDispersion = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
             # calculate tmi 
-            tmihc, tmicounthc, _ = rmaputils.calcTMI(spkPhaseHC, bins=phasebins)
-            tmiself, tmicountself, tmiedges = rmaputils.calcTMI(spkPhaseSelf, bins=phasebins)
+            tmihc, tmicounthc, tmiedges = rmaputils.calcTMI(spkPhaseHC, bins=phasebins)
             
             # store data for each cell in each hallway
             celldata[hallwaynum]['spkPos'] = spkPos
             celldata[hallwaynum]['spkPosts'] = spkPosts
             celldata[hallwaynum]['spkPosSpeed'] = spkPosSpeed
             celldata[hallwaynum]['spkPhaseHC'] = spkPhaseHC
-            celldata[hallwaynum]['spkPhaseSelf'] = spkPhaseSelf
             celldata[hallwaynum]['spkPosTrial'] = spkPosTrial
             celldata[hallwaynum]['spkPostsTrial'] = spkPostsTrial
             celldata[hallwaynum]['spkmaptr'] = spkmaptr
@@ -194,22 +196,20 @@ for dname, st, et in zip(filename, start_time, end_time):
             celldata[hallwaynum]['pfNumFields'] = pfNumFields
             celldata[hallwaynum]['pfDispersion'] = pfDispersion
             celldata[hallwaynum]['tmihc'] = tmihc
-            celldata[hallwaynum]['tmiself'] = tmiself
             celldata[hallwaynum]['tmicounthc'] = tmicounthc
-            celldata[hallwaynum]['tmicountself'] = tmicountself
             celldata[hallwaynum]['phasebins'] = tmiedges
         # plot the data across hallways for this cell
         spikedata[cid] = celldata
         del celldata
-    animaldat['spikedata'] = spikedata
+    adat['spikedata'] = spikedata
     del spikedata
     # save the processed data
     opfname = os.path.join(rmapdirname, dname+'-op.npy')
-    np.save(opfname, animaldat)
+    np.save(opfname, adat)
     # plot the output pdf
     pdfname = os.path.join(rmapdirname, dname+'-op.pdf')
     with PdfPages(pdfname) as pdf: 
-        for cid in clusterId:
-            fig = rmaputils.genAnalysisReport(animaldat, HALLWAYS, cid, rewardLocs, xt, xtcm, colors, linecolors, posMin=posMin, posMax=posMax, binwidth=binwidth)
+        for cid, region, depth, spikets  in tqdm(zip(clusterId, brainRegion, clusterDepth, spiketimes)):
+            fig = rmaputils.genAnalysisReport(adat, aname, spikets, HALLWAYS, cid, region, depth, rewardLocs, xt, xtcm, colors, linecolors, posMin=posMin, posMax=posMax, binwidth=binwidth)
             pdf.savefig(fig, dpi=100)
             plt.close()
