@@ -53,20 +53,18 @@ rezdat = spio.loadmat(r'T:\SWIL-Rajat\analysis-scripts\postProcessingKS2\chanMap
 xcoords = np.ravel(rezdat['xcoords'])
 ycoords = np.ravel(rezdat['ycoords'])
 channelpos = np.array(np.stack((xcoords,ycoords)).T, dtype='int16')
-refHCChnum = 20
 del xcoords,ycoords,rezdat
 # load each recording epochs file
 epochsdf = pd.read_csv(os.path.join(ephysdirname, epochsfname))
 filename = epochsdf['file_name']
 start_time, end_time, referenceHC = epochsdf['start_time'], epochsdf['end_time'], epochsdf['referenceHC']
 # load pooled unit metrics for all animals
-pooledMetricsdf = pd.read_csv(os.path.join(ephysdirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
+pooledMetricsdf = pd.read_csv(os.path.join(ephysdirname,'analyzedMetrics','pooledAllAnimals.csv'))
 if 'Unnamed: 0' in pooledMetricsdf.columns:
     pooledMetricsdf = pooledMetricsdf.drop(['Unnamed: 0'],axis=1)
-pooledMetricsdf['brainRegion'] = 'test'
 
 # loop through all recordings from each animal
-for dname, st, et in zip(filename, start_time, end_time):
+for dname, st, et, refHCChnum in zip(filename, start_time, end_time, referenceHC):
     print('.........')
     print('Processing ' + str(dname))
     if 'PPC' in dname:
@@ -112,8 +110,7 @@ for dname, st, et in zip(filename, start_time, end_time):
     metricsAnimaldf = pooledMetricsdf[pooledMetricsdf.aname==dname]
     spiketimes, clusterId, clusterDepth, brainRegion = rmaputils.loadGoodSpikeTimes(os.path.join(ephysdirname,dname), metricsAnimaldf)
     
-    # load channel indices for lfp data and lfp filename
-    channelIdx, channelmap = rmaputils.loadCorrectedChanMap(ephysdirname, dname, clusterId, metricsAnimaldf, channelpos)
+    # load lfp data
     lfpfilename = os.path.join(lfpdirname, aname+'_lfp.npy')
     if os.path.exists(os.path.join(lfpdirname, aname+'_lfpts.npy')):
         lfpts = np.load(os.path.join(lfpdirname, aname+'_lfpts.npy'), allow_pickle=True)
@@ -122,14 +119,18 @@ for dname, st, et in zip(filename, start_time, end_time):
     # load theta peak times for reference hippocampus electrode
     # slm layer electrode pre-determines marked as reference
     refThetaPeaks, lfpts, lfpsig, thetapk = rmaputils.calcThetaPeaks(lfpfilename, refHCChnum, st, et, eeg_times=lfpts, f_range=f_theta, fsl=fslfp, ampth=amplfpth)
+    
+    # load channel indices for main map
+    rezChnum, phyChnum = rmaputils.loadCorrectedChanMap(ephysdirname, dname, clusterId, metricsAnimaldf, channelpos)
         
     # iterate through spike timestamps
     spikedata = {}
-    for cid, spikets, chnum, chidx in tqdm(zip(clusterId, spiketimes, metricsAnimaldf.ch, channelIdx)):
-        if 'PPC' in dname:
-            chnum = int(chnum + 256) # add to account for PPC channels being at the end
-        else:
-            chnum = int(chidx)
+    for cid, spikets, chnum, rezch in tqdm(zip(clusterId, spiketimes, metricsAnimaldf.ch, rezChnum)):
+#        if 'PPC' in dname:
+##            assert chnum==rezch
+#            chnum = int(rezch + 256) # add to account for PPC channels being at the end
+#        else:
+#            chnum = int(rezch)
         # load LFP from reference hc + current unit channel
         spkPhaseRefHC = rmaputils.calcSpikePhase(refThetaPeaks, spikets)
         
@@ -162,9 +163,9 @@ for dname, st, et in zip(filename, start_time, end_time):
                                                                      adat[hallwaynum]['omapbins'], posMin=posMin, posMax=posMax, binwidth=binwidth, fs=fspos)
             # get placefield statistics: num field, field peak firing rate, size, center, dispersion
             if sinfo_p<0.01:
-                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields, pfDispersion = rmaputils.calcfieldSize(rmap1dsm, rmaptrsm, pixel2cm=bin2cm, L=posMax)
+                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields = rmaputils.calcfieldSize(rmap1dsm, rmaptrsm, pixel2cm=bin2cm, L=posMax)
             else:
-                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields, pfDispersion = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields = np.nan, np.nan, np.nan, np.nan, np.nan
             # calculate tmi 
             tmihc, tmicounthc, tmiedges = rmaputils.calcTMI(spkPhaseHC, bins=phasebins)
             
@@ -189,12 +190,10 @@ for dname, st, et in zip(filename, start_time, end_time):
             celldata[hallwaynum]['stabilityInd'] = stabilityInd
             celldata[hallwaynum]['sinfo_p'] = sinfo_p
             celldata[hallwaynum]['shuffledinfo'] = shuffledinfo
-            celldata[hallwaynum]['pfmap'] = pfmap
             celldata[hallwaynum]['pfPeakFr'] = pfPeakFr
             celldata[hallwaynum]['pfCenter'] = pfCenter
             celldata[hallwaynum]['pfSize'] = pfSize
             celldata[hallwaynum]['pfNumFields'] = pfNumFields
-            celldata[hallwaynum]['pfDispersion'] = pfDispersion
             celldata[hallwaynum]['tmihc'] = tmihc
             celldata[hallwaynum]['tmicounthc'] = tmicounthc
             celldata[hallwaynum]['phasebins'] = tmiedges

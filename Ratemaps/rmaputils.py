@@ -65,12 +65,12 @@ def binarySearch(data, val):
 def loadGoodSpikeTimes(dirname, metricsdf):
     clusterId = np.array(metricsdf.cluster_id)
     clusterDepth = np.array(metricsdf.depth)
-    region = np.array(metricsdf.brainRegion)
+    brregion = np.array(metricsdf.region)
     if os.path.exists(os.path.join(dirname, 'proc-spiketimes.npy')) and os.path.exists(os.path.join(dirname, 'proc-spikeclusters.npy')):
         spikeclusters = np.load(os.path.join(dirname, 'proc-spikeclusters.npy'), allow_pickle=True)
         if (spikeclusters==clusterId).all():
             spiketimes = np.load(os.path.join(dirname, 'proc-spiketimes.npy'), allow_pickle=True)
-            return spiketimes, clusterId, clusterDepth, region
+            return spiketimes, clusterId, clusterDepth, brregion
     return None
 
 # function to load the trial by trial data ocupancy data
@@ -194,16 +194,20 @@ def processSpikeMap(spkpostrial, spkpos, omapbins, posMin=0, posMax=314, binwidt
 # function to calculate ratemap
 def processRateMap(spkmaptr, omaptr, spkmaptrsm, omaptrsm, spkmap1d, omap1d, spkmap1dsm, omap1dsm, fs=30.0):
     rmaptr = (spkmaptr/omaptr)*fs
-    rmaptr[~np.isfinite(rmaptr)] = 0.0
+    rmaptr[np.isinf(rmaptr)] = 0.0
+    rmaptr[np.isnan(rmaptr)] = 0.0
     # smoothed ratemap across trials
     rmaptrsm = (spkmaptrsm/omaptrsm)*fs
-    rmaptrsm[~np.isfinite(rmaptrsm)] = 0.0
+    rmaptrsm[np.isinf(rmaptrsm)] = 0.0
+    rmaptrsm[np.isnan(rmaptrsm)] = 0.0
     # normalized firing rate map across trials
     rmaptrnorm = rmaptrsm/np.nanmax(rmaptrsm, axis=1, keepdims=True)
     # raw ratemap for entire session
     rmap1d = (spkmap1d/omap1d)*fs
+    rmap1d[np.isinf(rmap1d)] =np.nan
     # smooth ratemap for the entire session
     rmap1dsm = (spkmap1dsm/omap1dsm)*fs
+    rmap1dsm[np.isinf(rmap1dsm)] =np.nan
     # normalized firing rate map
     rmapnorm = np.apply_along_axis(norm1d, axis=0, arr=rmap1dsm)                
     return rmaptr, rmaptrsm, rmaptrnorm, rmap1d, rmap1dsm, rmapnorm
@@ -281,7 +285,7 @@ def calcShuffledSIByTrial(idx, spikets, occmap1d, endTime, startTime, trialStart
 
 # function to get shuffled spatial information
 def calcShuffleSpatialInfo(observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed,  occmapbins, posMin=0, posMax=314, binwidth=4, fs=30.):
-    lags = np.arange(100)
+    lags = np.arange(1000)
     from multiprocessing.dummy import Pool as ThreadPool
     pool = ThreadPool(10)
     args = zip(lags, repeat(spikets), repeat(occmap1d), repeat(endTime), repeat(startTime), 
@@ -322,7 +326,7 @@ def rotatedPlacemap(rmap, rmaptrial):
     return rmap, rmaptrial, valleyind
 
 # field size determination
-def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=5, pixel2cm=4, L=314):
+def calcfieldSize(rmap, rmaptrial, thresholdrate=1.0, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=5, pixel2cm=4, L=314):
     rmap = rmap - np.nanmin(rmap)
     placemap = np.zeros_like(rmap, dtype=int)
     placemap[rmap >= thresholdrate] = 1 #same as mosers' threshold
@@ -335,9 +339,9 @@ def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeak
     ##lets try to find center of the peaks
     for i in range(1,numfields+1):
         fieldPixels = np.where(placemap==i)
-        fieldpeak = max(rmap[fieldPixels])
+        fieldpeak = np.nanmax(rmap[fieldPixels])
         #fall off of firing rate to 15% PFR field
-        fieldthreshold = max(peakfallTh*fieldpeak, thresholdrate/2.)
+        fieldthreshold = np.nanmax([peakfallTh*fieldpeak, 0.5])
         #indixes where firing rate is less than 15%
         fieldsizecutoffind = np.where(rmap[fieldPixels]<fieldthreshold)
         #remove fields samller than 15cm and field peak firing rate less than 
@@ -365,9 +369,9 @@ def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeak
         countlaps=0
         for rt in rmaptrial:
             lappeakfr = np.nanmax(rt[fieldPixels])
-            if lappeakfr>=fieldpeak*0.5 and lappeakfr<=fieldpeak*1.5:
+            if lappeakfr>=fieldpeak*0.75 and lappeakfr<=fieldpeak*1.25:
                 countlaps+=1
-        if countlaps>=rmaptrial.shape[0]//3 or countlaps>=15:
+        if countlaps>=rmaptrial.shape[0]//3 and countlaps>=15:
             ind = np.where(rmap[fieldPixels]==fieldpeak)
             fieldpeakind = fieldPixels[0][ind[0]][0] 
             placeFieldsPeakFr.append(fieldpeak)
@@ -379,11 +383,11 @@ def calcfieldSize(rmap, rmaptrial, thresholdrate=0.5, peakfallTh=0.15, fieldpeak
     placeFieldsPeakFr = np.array(placeFieldsPeakFr)
     placeFieldsCenter = np.array(placeFieldsCenter)
     placeFieldsSize = np.array(placeFieldsSize)
-    if numFields:
-        pfDispersion = getFieldDispersion(rmaptrial, newplacemap, placeFieldsCenter, numFields, cmconversion=pixel2cm, L=L)
-    else:
-        pfDispersion = np.nan
-    return newplacemap, placeFieldsPeakFr, placeFieldsCenter, placeFieldsSize, numFields, pfDispersion
+#    if numFields:
+#        pfDispersion = getFieldDispersion(rmaptrial, newplacemap, placeFieldsCenter, numFields, cmconversion=pixel2cm, L=L)
+#    else:
+#        pfDispersion = np.nan
+    return newplacemap, placeFieldsPeakFr, placeFieldsCenter, placeFieldsSize, numFields
 
 # calculate place field dispersion
 def getFieldDispersion(rmaptrial, plmap, pfcenter, nfields, cmconversion=4, L=314):
@@ -419,7 +423,7 @@ def loadCorrectedChanMap(ephysdname, dname, clusterId, df, channelpos, MAX_CHAN=
             cmapIdx.append(idx[0])
         cmapIdx = np.array(cmapIdx)
     else:
-        cmapIdx = cmap
+        cmapIdx = df.ch
     return cmapIdx, cmap
 
 # function to calculate highest power theta channel
@@ -571,13 +575,16 @@ def genAnalysisReport(adat, aname, spikets, HALLWAYS, cid, region, depth, reward
     ax[2][3].set_xlim([0,100])
     ax[3][3].set_xlim([0,100])
     # firing statistics for each cell and hallway
-    sth1 = 'pk:'+str(round(np.max(np.nanmean(adat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][1]['sinfo'],1))
-    sth2 = 'pk:'+str(round(np.max(np.nanmean(adat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][2]['sinfo'],1))
-    sth28 = 'pk:'+str(round(np.max(np.nanmean(adat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][28]['sinfo'],1))
+    sth1 = 'pk:'+str(round(np.max(np.nanmax(adat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][1]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][1]['sinfo'],2))+', si_p:'+str(round(adat['spikedata'][cid][1]['sinfo_p'],2))
+#    sth1 = sth1 + ', n: ' + str(round(adat['spikedata'][cid][1]['pfNumFields'],1)) +', c: ' + str(adat['spikedata'][cid][1]['pfCenter'])
+    sth2 = 'pk:'+str(round(np.max(np.nanmax(adat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][2]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][2]['sinfo'],2))+', si_p:'+str(round(adat['spikedata'][cid][2]['sinfo_p'],2))
+#    sth2 = sth2 + ', n: ' + str(round(adat['spikedata'][cid][2]['pfNumFields'],1)) +', c: ' + str(adat['spikedata'][cid][2]['pfCenter'])
+    sth28 = 'pk:'+str(round(np.max(np.nanmax(adat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', m:'+str(round(np.nanmean(np.nanmean(adat['spikedata'][cid][28]['rmaptrsm'],0)),1))+', i:'+str(round(adat['spikedata'][cid][28]['sinfo'],2))+', si_p:'+str(round(adat['spikedata'][cid][28]['sinfo_p'],2))
+#    sth28 = sth28 + ', n: ' + str(round(adat['spikedata'][cid][28]['pfNumFields'],1)) +', c: ' + str(adat['spikedata'][cid][28]['pfCenter'])
     ax[5][3].text(0.01,0.9,'Hall#1: ' + sth1)
     ax[5][3].text(0.01,0.6,'Hall#2: ' + sth2)
     ax[5][3].text(0.01,0.3,'Hall#28: ' + sth28)
     ax[5][3].set_axis_off()
-    plt.suptitle('Aname: ' + aname + ', CId: ' + str(cid) + ', Depth: ' + str(depth) + ', Region: ' + region, fontsize=20)
+    plt.suptitle('aid: ' + aname + ', CId: ' + str(cid) + ', Depth: ' + str(depth) + ', Region: ' + region, fontsize=20)
     plt.tight_layout()
     return fig
