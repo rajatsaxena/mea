@@ -73,7 +73,7 @@ for aname,adname,itidx in zip(animalsname,animalsdirname, indices):
     allhallwaydata = {}
     meanSpeed = []
     # iterate over each halls
-    for hnum in [2,1,28]:
+    for hnum in [1,2,28]:
         # sanity check to skip certain hallways 
         if sum(np.array(dat['hallnum'],dtype=int)==hnum)>5:
             # create hallway specific dataframe
