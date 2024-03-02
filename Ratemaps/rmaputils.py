@@ -229,10 +229,10 @@ def calcSpatialInformationScore(rateMap, occmap):
             if r> 0.0001:
                 si = si + p_i*(r/mrate)*np.log2(r/mrate)
         if si<0:
-            si=0
+            si=np.nan
     else:
         si = np.nan
-    return np.round(si,2)
+    return np.round(si,3)
 
 # calclate shuffled spatial info
 def calcShuffledSI(idx, observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
@@ -254,7 +254,7 @@ def calcShuffledSI(idx, observedSI, spikets, occmap1d, endTime, startTime, trial
 # calclate shuffled spatial info by shuffling for individual trials
 def calcShuffledSIByTrial(idx, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
     # Generate lag values for all trials at once
-    lags = np.random.uniform(2, trialEnd - trialStart, len(trialStart))
+    lags = np.random.uniform(0.5, trialEnd - trialStart, len(trialStart))
     # Iterate over each trial using zip
     spkmaptrials = []
     for ts, te, lag in zip(trialStart, trialEnd, lags):
@@ -285,7 +285,7 @@ def calcShuffledSIByTrial(idx, spikets, occmap1d, endTime, startTime, trialStart
 
 # function to get shuffled spatial information
 def calcShuffleSpatialInfo(observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed,  occmapbins, posMin=0, posMax=314, binwidth=4, fs=30.):
-    lags = np.arange(1000)
+    lags = np.arange(250)
     from multiprocessing.dummy import Pool as ThreadPool
     pool = ThreadPool(10)
     args = zip(lags, repeat(spikets), repeat(occmap1d), repeat(endTime), repeat(startTime), 
