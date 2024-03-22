@@ -80,10 +80,8 @@ else:
     maindf.to_csv(os.path.join(dirname,'analyzedMetrics','pooledMetricsAllAnimals.csv'))
 print(maindf.cellType.value_counts())
 
-czc
-
 # plot data with waveform properties
-figname = os.path.join(dirname,'analyzedMetrics','pooledWFAnimals.pdf')
+figname = os.path.join(dirname,'analyzedMetrics','Fig2a.pdf')
 colors = {'Narrow Interneuron': 'green', 'Pyramidal Cell': 'purple', 'Wide Interneuron': 'purple'}   # Colors for each cell type
 df = maindf[(maindf.cellType!='Biphasic') & (maindf.cellType!='Positive')]
 df.loc[df.cellType=='Wide Interneuron', 'cellType'] = 'Pyramidal Cell'

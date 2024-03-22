@@ -209,8 +209,6 @@ def load_kilosort_data(folder,  sample_rate = None, convert_to_seconds = True, t
                     
     return ampltiude, spike_times, spike_clusters, unwhitened_temps, channel_map, cluster_ids, cluster_info
 
-
-
 # calculate waveform metrics
 def calculate_waveform_metrics(waveforms, 
                                cluster_id, 
@@ -279,8 +277,8 @@ def calculate_waveform_metrics(waveforms,
     metrics = pd.DataFrame(data,
                            columns=['cluster_id', 'duration', 'halfwidth',
                                      'PT_ratio', 'repolarization_slope', 'recovery_slope'])
-
     return metrics
+
 
 def extract_waveforms(raw_data, 
                       spike_times, 
