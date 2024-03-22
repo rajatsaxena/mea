@@ -15,6 +15,7 @@ from tqdm import tqdm
 import scipy.io as spio
 from matplotlib.backends.backend_pdf import PdfPages
 
+
 # THRESHOLD PARAMS
 speedTh = 2 # cm/s
 MAX_CHAN = 256
@@ -154,8 +155,10 @@ for dname, st, et, refHCChnum in zip(filename, start_time, end_time, referenceHC
             
             # firing statistics: spatial information, sparsity, stability index
             sinfo = rmaputils.calcSpatialInformationScore(rmap1dsm, adat[hallwaynum]['omap1dsm'])
+            mi = rmaputils.calcMutualInfo(spkmaptrsm, adat[hallwaynum]['omaptrsm'])
             sparsity, _ = rmaputils.calcSparsity(rmap1dsm, rmaptrsm)
             stabilityInd = rmaputils.calcStabilityIndex(rmaptrsm)
+            
             # spatialinfo significance
             sinfo_p, shuffledinfo = rmaputils.calcShuffleSpatialInfo(sinfo, spikets, adat[hallwaynum]['omap1dsm'], adat[hallwaynum]['posT'][-1], 
                                                                      adat[hallwaynum]['posT'][0], adat[hallwaynum]['trStart'], adat[hallwaynum]['trEnd'], 
@@ -163,9 +166,9 @@ for dname, st, et, refHCChnum in zip(filename, start_time, end_time, referenceHC
                                                                      adat[hallwaynum]['omapbins'], posMin=posMin, posMax=posMax, binwidth=binwidth, fs=fspos)
             # get placefield statistics: num field, field peak firing rate, size, center, dispersion
             if sinfo_p<0.01:
-                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields = rmaputils.calcfieldSize(rmap1dsm, rmaptrsm, pixel2cm=bin2cm, L=posMax)
+                pfmap, pfEdges, pfPeakFr, pfCenter, pfSize, pfNumFields = rmaputils.calcfieldSize(rmap1dsm, rmaptrsm, pixel2cm=bin2cm, L=posMax)
             else:
-                pfmap, pfPeakFr, pfCenter, pfSize, pfNumFields = np.nan, np.nan, np.nan, np.nan, np.nan
+                pfmap, pfEdges, pfPeakFr, pfCenter, pfSize, pfNumFields = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
             # calculate tmi 
             tmihc, tmicounthc, tmiedges = rmaputils.calcTMI(spkPhaseHC, bins=phasebins)
             
@@ -185,6 +188,7 @@ for dname, st, et, refHCChnum in zip(filename, start_time, end_time, referenceHC
             celldata[hallwaynum]['rmaptrsm'] = rmaptrsm
             celldata[hallwaynum]['rmap1d'] = rmap1d
             celldata[hallwaynum]['rmap1dsm'] = rmap1dsm
+            celldata[hallwaynum]['mi'] = mi
             celldata[hallwaynum]['sinfo'] = sinfo
             celldata[hallwaynum]['sparsity'] = sparsity
             celldata[hallwaynum]['stabilityInd'] = stabilityInd
@@ -194,6 +198,7 @@ for dname, st, et, refHCChnum in zip(filename, start_time, end_time, referenceHC
             celldata[hallwaynum]['pfCenter'] = pfCenter
             celldata[hallwaynum]['pfSize'] = pfSize
             celldata[hallwaynum]['pfNumFields'] = pfNumFields
+            celldata[hallwaynum]['pfEdges'] = pfEdges
             celldata[hallwaynum]['tmihc'] = tmihc
             celldata[hallwaynum]['tmicounthc'] = tmicounthc
             celldata[hallwaynum]['phasebins'] = tmiedges

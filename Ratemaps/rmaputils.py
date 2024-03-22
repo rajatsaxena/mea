@@ -212,8 +212,36 @@ def processRateMap(spkmaptr, omaptr, spkmaptrsm, omaptrsm, spkmap1d, omap1d, spk
     rmapnorm = np.apply_along_axis(norm1d, axis=0, arr=rmap1dsm)                
     return rmaptr, rmaptrsm, rmaptrnorm, rmap1d, rmap1dsm, rmapnorm
 
+# function to calculate mutual information
+def calcMutualInfo(spikemap, occupancy):
+  # Calculate joint probability distribution
+  joint_prob = (spikemap * occupancy) / np.nansum(occupancy)
+
+  # Calculate marginal probabilities
+  spike_prob = np.nansum(joint_prob, axis=1)
+  position_prob = np.nansum(joint_prob, axis=0)
+
+  # Add a small value to avoid log(0) errors
+  joint_prob += 1e-3
+  spike_prob += 1e-3
+  position_prob += 1e-3
+
+  # Calculate entropy terms
+  joint_entropy = -np.nansum(joint_prob * np.log2(joint_prob))
+  spike_entropy = -np.nansum(spike_prob * np.log2(spike_prob))
+  position_entropy = -np.nansum(position_prob * np.log2(position_prob))
+
+  # Calculate mutual information
+  mi = joint_entropy - spike_entropy - position_entropy
+  mi = mi/np.nanmean(np.nansum(spikemap, axis=1))
+  
+  return mi
+
 # function to compute spatial information score
 def calcSpatialInformationScore(rateMap, occmap):    
+#    # HACK
+#    rateMap = rateMap[1:-1]
+#    occmap = occmap[1:-1]
     si = 0
     occmap = np.nan_to_num(occmap)  # Convert NaNs to zeros
     if np.nanmax(rateMap)>=0:
@@ -229,9 +257,9 @@ def calcSpatialInformationScore(rateMap, occmap):
             if r> 0.0001:
                 si = si + p_i*(r/mrate)*np.log2(r/mrate)
         if si<0:
-            si=np.nan
+            si=0.001
     else:
-        si = np.nan
+        si=0.001
     return np.round(si,3)
 
 # calclate shuffled spatial info
@@ -254,7 +282,7 @@ def calcShuffledSI(idx, observedSI, spikets, occmap1d, endTime, startTime, trial
 # calclate shuffled spatial info by shuffling for individual trials
 def calcShuffledSIByTrial(idx, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed, occmapbins, posMin=0, posMax=314, binwidth=3.14, fs=30.):
     # Generate lag values for all trials at once
-    lags = np.random.uniform(0.5, trialEnd - trialStart, len(trialStart))
+    lags = np.random.uniform(2, np.nanmin(trialEnd - trialStart), len(trialStart))
     # Iterate over each trial using zip
     spkmaptrials = []
     for ts, te, lag in zip(trialStart, trialEnd, lags):
@@ -285,7 +313,7 @@ def calcShuffledSIByTrial(idx, spikets, occmap1d, endTime, startTime, trialStart
 
 # function to get shuffled spatial information
 def calcShuffleSpatialInfo(observedSI, spikets, occmap1d, endTime, startTime, trialStart, trialEnd, posX, posT, posSpeed,  occmapbins, posMin=0, posMax=314, binwidth=4, fs=30.):
-    lags = np.arange(250)
+    lags = np.arange(1000)
     from multiprocessing.dummy import Pool as ThreadPool
     pool = ThreadPool(10)
     args = zip(lags, repeat(spikets), repeat(occmap1d), repeat(endTime), repeat(startTime), 
@@ -326,7 +354,7 @@ def rotatedPlacemap(rmap, rmaptrial):
     return rmap, rmaptrial, valleyind
 
 # field size determination
-def calcfieldSize(rmap, rmaptrial, thresholdrate=1.0, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=5, pixel2cm=4, L=314):
+def calcfieldSize(rmap, rmaptrial, thresholdrate=1.0, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=3, pixel2cm=4, L=314):
     rmap = rmap - np.nanmin(rmap)
     placemap = np.zeros_like(rmap, dtype=int)
     placemap[rmap >= thresholdrate] = 1 #same as mosers' threshold
@@ -336,6 +364,7 @@ def calcfieldSize(rmap, rmaptrial, thresholdrate=1.0, peakfallTh=0.15, fieldpeak
     placeFieldsPeakFr = []
     placeFieldsCenter = []
     placeFieldsSize = []    
+    placeFieldEdges = []
     ##lets try to find center of the peaks
     for i in range(1,numfields+1):
         fieldPixels = np.where(placemap==i)
@@ -369,25 +398,28 @@ def calcfieldSize(rmap, rmaptrial, thresholdrate=1.0, peakfallTh=0.15, fieldpeak
         countlaps=0
         for rt in rmaptrial:
             lappeakfr = np.nanmax(rt[fieldPixels])
-            if lappeakfr>=fieldpeak*0.75 and lappeakfr<=fieldpeak*1.25:
+            if lappeakfr>=fieldpeak*0.75 and lappeakfr<=fieldpeak*2.75:
                 countlaps+=1
-        if countlaps>=rmaptrial.shape[0]//3 and countlaps>=15:
+        if countlaps>=rmaptrial.shape[0]//1.5 and countlaps>=15:
             ind = np.where(rmap[fieldPixels]==fieldpeak)
             fieldpeakind = fieldPixels[0][ind[0]][0] 
-            placeFieldsPeakFr.append(fieldpeak)
-            placeFieldsCenter.append(fieldpeakind)
-            placeFieldsSize.append(round(len(fieldPixels[0])*pixel2cm,2)) #converting to cm
-            fieldnum = fieldnum + 1
-            newplacemap[fieldPixels] = fieldnum
+            if len(fieldPixels[0])>fieldcutoff:
+                placeFieldsPeakFr.append(fieldpeak)
+                placeFieldsCenter.append(fieldpeakind)
+                placeFieldsSize.append(round(len(fieldPixels[0])*pixel2cm,2)) #converting to cm
+                fieldnum = fieldnum + 1
+                newplacemap[fieldPixels] = fieldnum
+                placeFieldEdges.append([fieldPixels[0][0], fieldPixels[0][-1]])
     numFields = len(placeFieldsCenter)
     placeFieldsPeakFr = np.array(placeFieldsPeakFr)
     placeFieldsCenter = np.array(placeFieldsCenter)
     placeFieldsSize = np.array(placeFieldsSize)
+    placeFieldEdges = np.array(placeFieldEdges)
 #    if numFields:
 #        pfDispersion = getFieldDispersion(rmaptrial, newplacemap, placeFieldsCenter, numFields, cmconversion=pixel2cm, L=L)
 #    else:
 #        pfDispersion = np.nan
-    return newplacemap, placeFieldsPeakFr, placeFieldsCenter, placeFieldsSize, numFields
+    return newplacemap, placeFieldEdges, placeFieldsPeakFr, placeFieldsCenter, placeFieldsSize, numFields
 
 # calculate place field dispersion
 def getFieldDispersion(rmaptrial, plmap, pfcenter, nfields, cmconversion=4, L=314):
@@ -494,7 +526,7 @@ def calcTMI(phase, bins=np.arange(0,4*360+15,15)):
     phase = np.array(phase)
     phase = np.concatenate((phase,phase+360,phase+2*360,phase+3*360,phase+4*360))
     count, edges = np.histogram(phase, bins)
-    count = scnd.gaussian_filter1d(count,2)
+    count = scnd.gaussian_filter1d(count,1)
     count = np.divide(count, np.nanmax(count))
     count2 = count[np.where((edges>=360) & (edges<=720))[0]]
     tmi = 1 - np.nanmin(count2)
