@@ -37,7 +37,7 @@ qualParams['firing_rate_th'] = 0.1  # firing rate above 0.1 Hz
 qualParams['amp_th'] = 30 # ampltiude greater than 30 uV 
 
 # read csv with start and end time for each experimental animal
-dirname = r'X:\SWIL-Exp-Rajat\Spikesorted-SWIL'
+dirname = r'T:\SWIL-Rajat\Spikesorted-SWIL'
 epochsfname = 'swil-animals.csv'
 epochsdf = pd.read_csv(os.path.join(dirname,epochsfname))
 filename = epochsdf['file_name']
