@@ -78,8 +78,6 @@ for aname,adname,itidx in zip(animalsname,animalsdirname, indices):
         if sum(np.array(dat['hallnum'],dtype=int)==hnum)>5:
             # create hallway specific dataframe
             allhallwaydata[hnum] = calcHallwayData(dat, hnum, binwidth=BINWIDTH)
-            if 'SWIL12' in aname:
-                dada
             normspeed = norm1D(np.nanmean(allhallwaydata[hnum]['binned_speed'],0)[1:])
             print(allhallwaydata[hnum]['binned_speed'].shape[0])
             meanSpeed.append(normspeed)
