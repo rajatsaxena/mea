@@ -194,7 +194,7 @@ def calcTrialData(dfhnum, trial_start, trial_end):
 def calcTrialTransitionIdx(pos, dat):
     posdiff = np.diff(pos)
     idx = np.where(posdiff<-0.2)[0]
-    start_idx = idx+1
+    start_idx = idx+3
     start_idx = np.insert(start_idx,0,0)
     end_idx = idx+1
     end_idx = np.append(end_idx,len(dat))
