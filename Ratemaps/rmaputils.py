@@ -355,6 +355,7 @@ def rotatedPlacemap(rmap, rmaptrial):
 
 # field size determination
 def calcfieldSize(rmap, rmaptrial, thresholdrate=1.0, peakfallTh=0.15, fieldpeakFr=0.5, fieldcutoff=3, pixel2cm=4, L=314):
+#    rmap = rmap - np.nanmin(rmap[1:-1]) #HACK
     rmap = rmap - np.nanmin(rmap)
     placemap = np.zeros_like(rmap, dtype=int)
     placemap[rmap >= thresholdrate] = 1 #same as mosers' threshold

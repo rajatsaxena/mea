@@ -32,7 +32,7 @@ dt = 1./fspos
 posMin = 0
 posMax = 314 #cm
 binwidth = 314/100 #cm
-gsmooth = 0.25
+gsmooth = 1
 bin2cm = binwidth
 xt = np.array([0,50,100])
 xtcm = xt*binwidth
@@ -60,7 +60,7 @@ epochsdf = pd.read_csv(os.path.join(ephysdirname, epochsfname))
 filename = epochsdf['file_name']
 start_time, end_time, referenceHC = epochsdf['start_time'], epochsdf['end_time'], epochsdf['referenceHC']
 # load pooled unit metrics for all animals
-pooledMetricsdf = pd.read_csv(os.path.join(ephysdirname,'analyzedMetrics','pooledAllAnimals.csv'))
+pooledMetricsdf = pd.read_csv(os.path.join(ephysdirname,'analyzedMetrics','pooledMetricsAll.csv'))
 if 'Unnamed: 0' in pooledMetricsdf.columns:
     pooledMetricsdf = pooledMetricsdf.drop(['Unnamed: 0'],axis=1)
 
