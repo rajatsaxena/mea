@@ -12,7 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # load the raw data
-dirname = './Spikesorted-SWIL/SWIL26PPC'
+dirname = r'T:\SWIL-Rajat\Spikesorted-SWIL\SWIL25PPC'
 spike_clusters = np.ravel(np.load(os.path.join(dirname,'spike_clusters.npy'),mmap_mode='r'))
 spike_times = np.ravel(np.load(os.path.join(dirname,'spike_times.npy'),mmap_mode='r'))
 
