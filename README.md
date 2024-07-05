@@ -31,6 +31,8 @@ Note that many of these scripts are modified from different sources such as Alle
   * decimateLFP_fs24.py.py: script to decimate LFPs by 24x for all recorded channels
   * mea.py: script with utils functions
   * detect_peaks.npy: script to detect peaks (similar to matlab)
+  * proCSD.py: run CSD analysis on Si electrodes
+  * relLFPPowerByDepth.py: relative power in high-freq band (>300 Hz) by depth 
 
 * **Ratemaps** : scripts for generating rate for SWIL project
   * rmaputils.py: utils for generating ratemaps
