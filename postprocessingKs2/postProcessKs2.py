@@ -117,8 +117,8 @@ for dname, st, et in zip(filename, start_time, end_time):
     good_clusters_channel_index = []
     for cnum in metrics[metrics['isGood']]['ch']:
         good_clusters_channel_index.append((np.where(cnum==channel_map)[0][0]))
-        cluster_xpos = np.array(channel_positionsX[good_clusters_channel_index])
-        cluster_ypos = np.array(channel_positionsY[good_clusters_channel_index]*0.001)
+    cluster_xpos = np.array(channel_positionsX[good_clusters_channel_index])
+    cluster_ypos = np.array(channel_positionsY[good_clusters_channel_index]*0.001)
     
     # plot data
     fig = plt.figure(figsize=(6,10))
