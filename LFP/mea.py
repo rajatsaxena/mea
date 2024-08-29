@@ -5,13 +5,6 @@ Created on Thu Mar 19 23:14:10 2020
 @author: Rajat
 """
 
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Jul 27 21:13:53 2019
-
-@author: Rajat
-"""
-
 import warnings
 warnings.filterwarnings('ignore')
 from scipy.signal import butter, filtfilt
