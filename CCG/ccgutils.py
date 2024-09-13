@@ -44,20 +44,11 @@ def CCG(times, ids, binSize=0.001, duration=0.1, nBins=None, smooth=0, alpha=0.0
     # Call CCGEngine (Cython function)
     counts = CCGEngine(times, ids, binSize, halfBins)
     
-    # # Reshape the results
+    # Reshape the results
     nIDs = max(ids)
     counts = counts.reshape((nIDs, nIDs, nBins)).transpose((2, 0, 1))
     
-    ccg = np.zeros((nBins, nIDs, nIDs))
-    # Compute corr(A,B) for each unique unordered pair (A,B)
-    for g1 in range(nIDs):
-        for g2 in range(g1, nIDs):
-            ccg[:, g1, g2] = np.flipud(counts[:, g1, g2])
-    
-    # corr(B,A) symmetric part
-    for g1 in range(nIDs):
-        for g2 in range(g1):
-            ccg[:, g1, g2] = np.flipud(ccg[:, g2, g1])
+    ccg = np.flipud(counts)
     
     return counts, t
 
