@@ -48,8 +48,6 @@ def CCG(times, ids, binSize=0.001, duration=0.1, nBins=None, smooth=0, alpha=0.0
     nIDs = max(ids)
     counts = counts.reshape((nIDs, nIDs, nBins)).transpose((2, 0, 1))
     
-    ccg = np.flipud(counts)
-    
     return counts, t
 
 
